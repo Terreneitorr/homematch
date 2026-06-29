@@ -1,0 +1,50 @@
+name: homematch_ai
+description: Plataforma inteligente de búsqueda inmobiliaria
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # HTTP
+  dio: ^5.4.0
+
+  # State Management / MVVM
+  provider: ^6.1.1
+
+  # Navegación
+  go_router: ^13.2.0
+
+  # Almacenamiento local
+  flutter_secure_storage: ^9.0.0
+  shared_preferences: ^2.2.2
+
+  # Google OAuth2
+  google_sign_in: ^6.2.1
+
+  # Inyección de dependencias
+  get_it: ^7.6.7
+
+  # Modelos / serialización
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+
+  # UI
+  cupertino_icons: ^1.0.6
+
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  build_runner: ^2.4.8
+  freezed: ^2.4.7
+  json_serializable: ^6.7.1
+
+flutter:
+  uses-material-design: true
