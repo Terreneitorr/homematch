@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/theme/app_theme.dart';
@@ -20,6 +21,13 @@ import 'features/favorites/presentation/viewmodels/favorites_viewmodel.dart';
 import 'features/search/presentation/viewmodels/search_viewmodel.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
   runApp(const HomeMatchApp());
 }
 
@@ -35,21 +43,21 @@ class HomeMatchApp extends StatelessWidget {
     final favoritesRepository = FavoritesRepositoryImpl();
 
     final textTheme = TextTheme(
-      displayLarge: GoogleFonts.playfairDisplay(fontSize: 57),
-      displayMedium: GoogleFonts.playfairDisplay(fontSize: 45),
-      displaySmall: GoogleFonts.playfairDisplay(fontSize: 36),
-      headlineLarge: GoogleFonts.playfairDisplay(fontSize: 32),
-      headlineMedium: GoogleFonts.playfairDisplay(fontSize: 28),
-      headlineSmall: GoogleFonts.playfairDisplay(fontSize: 24),
+      displayLarge: GoogleFonts.playfairDisplay(fontSize: 57, fontWeight: FontWeight.w700),
+      displayMedium: GoogleFonts.playfairDisplay(fontSize: 45, fontWeight: FontWeight.w700),
+      displaySmall: GoogleFonts.playfairDisplay(fontSize: 36, fontWeight: FontWeight.w600),
+      headlineLarge: GoogleFonts.playfairDisplay(fontSize: 32, fontWeight: FontWeight.w600),
+      headlineMedium: GoogleFonts.playfairDisplay(fontSize: 28, fontWeight: FontWeight.w600),
+      headlineSmall: GoogleFonts.playfairDisplay(fontSize: 24, fontWeight: FontWeight.w600),
       titleLarge: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w600),
-      titleMedium: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500),
-      titleSmall: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
-      bodyLarge: GoogleFonts.inter(fontSize: 16),
-      bodyMedium: GoogleFonts.inter(fontSize: 14),
-      bodySmall: GoogleFonts.inter(fontSize: 12),
+      titleMedium: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
+      titleSmall: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+      bodyLarge: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w400),
+      bodyMedium: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400),
+      bodySmall: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w400),
       labelLarge: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
-      labelMedium: GoogleFonts.inter(fontSize: 12),
-      labelSmall: GoogleFonts.inter(fontSize: 11),
+      labelMedium: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
+      labelSmall: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w500),
     );
 
     final materialTheme = MaterialTheme(textTheme);
@@ -81,7 +89,7 @@ class HomeMatchApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: materialTheme.light(),
         darkTheme: materialTheme.dark(),
-        themeMode: ThemeMode.system,
+        themeMode: ThemeMode.light,
         home: Consumer<AuthViewModel>(
           builder: (context, authVM, _) {
             if (authVM.status == AuthStatus.authenticated) {
