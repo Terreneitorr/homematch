@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:homematch_ai/features/analytics/presentation/views/analytics_view.dart';
+import 'package:homematch_ai/features/analytics/presentation/views/analytics_view.dart' hide AnalyticsView;
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../viewmodels/auth_viewmodel.dart';
@@ -8,6 +8,13 @@ import '../../../favorites/presentation/views/favorites_view.dart';
 import '../../../search/presentation/views/search_view.dart';
 import '../../../properties/presentation/viewmodels/property_viewmodel.dart';
 import '../../../favorites/presentation/viewmodels/favorites_viewmodel.dart';
+import '../../../appointments/presentation/views/appointments_view.dart';
+import '../../../appointments/presentation/views/appointments_view.dart';
+import '../../../analytics/presentation/views/analytics_view.dart';
+import '../../../../features/profile/presentation/views/edit_profile_view.dart';
+import '../../../../features/history/presentation/views/history_view.dart';
+import '../../../properties/presentation/views/create_property_view.dart';
+import '../../../../core/network/dio_client.dart';
 
 class MainNavigationView extends StatefulWidget {
   const MainNavigationView({super.key});
@@ -108,8 +115,50 @@ class _MainNavigationViewState extends State<MainNavigationView> {
 }
 
 // ─── SELLER DASHBOARD ────────────────────────────────────────────
-class _SellerDashboard extends StatelessWidget {
+class _SellerDashboard extends StatefulWidget {
   const _SellerDashboard();
+
+  @override
+  State<_SellerDashboard> createState() => _SellerDashboardState();
+}
+
+class _SellerDashboardState extends State<_SellerDashboard> {
+  Map<String, dynamic> _stats = {
+    'properties': 0,
+    'active': 0,
+    'appointments': 0,
+    'messages': 0,
+  };
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final propRes = await DioClient().dio.get('/properties/');
+      final aptRes = await DioClient().dio.get('/appointments/');
+      final userId = context.read<AuthViewModel>().user?.id ?? '';
+      final props = (propRes.data as List)
+          .where((p) => p['owner_id'] == userId)
+          .toList();
+      final active = props.where((p) => p['status'] == 'available').length;
+      setState(() {
+        _stats = {
+          'properties': props.length,
+          'active': active,
+          'appointments': (aptRes.data as List).length,
+          'messages': 0,
+        };
+        _loading = false;
+      });
+    } catch (_) {
+      setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,45 +166,92 @@ class _SellerDashboard extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text('Mi Dashboard', style: theme.textTheme.titleLarge),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh, color: theme.colorScheme.primary),
+            onPressed: () { setState(() => _loading = true); _load(); },
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Resumen', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 12),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.4,
-              children: [
-                _StatCard(theme: theme, icon: Icons.home_work, value: '0', label: 'Propiedades', color: theme.colorScheme.primary),
-                _StatCard(theme: theme, icon: Icons.check_circle, value: '0', label: 'Activas', color: theme.colorScheme.secondary),
-                _StatCard(theme: theme, icon: Icons.calendar_today, value: '0', label: 'Citas', color: theme.colorScheme.tertiary),
-                _StatCard(theme: theme, icon: Icons.message, value: '0', label: 'Mensajes', color: theme.colorScheme.error),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Text('Acciones rápidas', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 12),
-            _ActionTile(theme: theme, icon: Icons.add_home, title: 'Publicar propiedad', subtitle: 'Agrega una nueva publicación'),
-            _ActionTile(theme: theme, icon: Icons.edit, title: 'Gestionar propiedades', subtitle: 'Edita o elimina publicaciones'),
-            _ActionTile(theme: theme, icon: Icons.calendar_month, title: 'Ver citas', subtitle: 'Administra tus visitas agendadas'),
-            _ActionTile(theme: theme, icon: Icons.analytics_outlined, title: 'Ver estadísticas', subtitle: 'Métricas del mercado',
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const AnalyticsView(),
+      body: _loading
+          ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
+          : RefreshIndicator(
+        onRefresh: _load,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Resumen', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 12),
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.4,
+                children: [
+                  _StatCard(
+                    theme: theme,
+                    icon: Icons.home_work,
+                    value: '${_stats['properties']}',
+                    label: 'Mis propiedades',
+                    color: theme.colorScheme.primary,
                   ),
-                );
-              },
-            ),
-          ],
+                  _StatCard(
+                    theme: theme,
+                    icon: Icons.check_circle,
+                    value: '${_stats['active']}',
+                    label: 'Activas',
+                    color: theme.colorScheme.secondary,
+                  ),
+                  _StatCard(
+                    theme: theme,
+                    icon: Icons.calendar_today,
+                    value: '${_stats['appointments']}',
+                    label: 'Citas',
+                    color: theme.colorScheme.tertiary,
+                  ),
+                  _StatCard(
+                    theme: theme,
+                    icon: Icons.message,
+                    value: '${_stats['messages']}',
+                    label: 'Mensajes',
+                    color: theme.colorScheme.error,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Text('Acciones rápidas', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 12),
+              _ActionTile(
+                theme: theme,
+                icon: Icons.add_home,
+                title: 'Publicar propiedad',
+                subtitle: 'Agrega una nueva publicación',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const CreatePropertyView())),
+              ),
+              _ActionTile(
+                theme: theme,
+                icon: Icons.calendar_month,
+                title: 'Ver mis citas',
+                subtitle: 'Administra tus visitas agendadas',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const AppointmentsView())),
+              ),
+              _ActionTile(
+                theme: theme,
+                icon: Icons.analytics_outlined,
+                title: 'Estadísticas del mercado',
+                subtitle: 'Métricas y tendencias',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const AnalyticsView())),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -327,9 +423,27 @@ class _ProfileView extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _SectionHeader(theme: theme, title: 'Mi cuenta'),
-                  _ProfileTile(theme: theme, icon: Icons.edit_outlined, title: 'Editar perfil'),
-                  _ProfileTile(theme: theme, icon: Icons.history, title: 'Historial de búsquedas'),
-                  _ProfileTile(theme: theme, icon: Icons.calendar_today_outlined, title: 'Mis citas'),
+                  _ProfileTile(
+                    theme: theme,
+                    icon: Icons.edit_outlined,
+                    title: 'Editar perfil',
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const EditProfileView())),
+                  ),
+                  _ProfileTile(
+                    theme: theme,
+                    icon: Icons.history,
+                    title: 'Historial de búsquedas',
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const HistoryView())),
+                  ),
+                  _ProfileTile(
+                    theme: theme,
+                    icon: Icons.calendar_today_outlined,
+                    title: 'Mis citas',
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const AppointmentsView())),
+                  ),
                   const SizedBox(height: 16),
                   _SectionHeader(theme: theme, title: 'Soporte'),
                   _ProfileTile(theme: theme, icon: Icons.help_outline, title: 'Centro de ayuda'),
@@ -491,7 +605,14 @@ class _ProfileTile extends StatelessWidget {
   final ThemeData theme;
   final IconData icon;
   final String title;
-  const _ProfileTile({required this.theme, required this.icon, required this.title});
+  final VoidCallback? onTap;
+
+  const _ProfileTile({
+    required this.theme,
+    required this.icon,
+    required this.title,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -506,7 +627,7 @@ class _ProfileTile extends StatelessWidget {
         title: Text(title, style: theme.textTheme.bodyMedium),
         trailing: Icon(Icons.arrow_forward_ios,
             size: 12, color: theme.colorScheme.outline),
-        onTap: () {},
+        onTap: onTap,
         dense: true,
       ),
     );

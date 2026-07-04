@@ -69,18 +69,16 @@ class _SearchViewState extends State<SearchView> {
                 )
                     : null,
               ),
-              onChanged: (v) {
+              onChanged: (v) async {
                 searchVM.search(v);
                 setState(() {});
-
-                // Guardar búsqueda en el historial
-                if (v.length > 3) {
-                  DioClient().dio.post(
-                    '/history/',
-                    queryParameters: {'query': v},
-                  ).then((_) {}).catchError((_) {
-                    // Al usar .then() primero, el catchError ya no requiere devolver un Response
-                  });
+                if (v.trim().length >= 4) {
+                  try {
+                    await DioClient().dio.post(
+                      '/history/',
+                      queryParameters: {'query': v.trim()},
+                    );
+                  } catch (_) {}
                 }
               },
             ),

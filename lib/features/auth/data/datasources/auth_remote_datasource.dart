@@ -1,11 +1,11 @@
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
 import '../models/user_model.dart';
 
 abstract class AuthRemoteDataSource {
   Future<UserModel> loginWithGoogle();
   Future<void> logout();
+  Future<UserModel?> getCurrentUser();
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -22,7 +22,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     final account = await _googleSignIn.signIn();
     if (account == null) throw Exception('Login cancelado');
 
-    // Enviar al backend
     final response = await _client.dio.post('/auth/google', data: {
       'google_id': account.id,
       'name': account.displayName ?? '',
@@ -46,5 +45,25 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<void> logout() async {
     await _googleSignIn.signOut();
     await _client.deleteToken();
+  }
+
+  @override
+  Future<UserModel?> getCurrentUser() async {
+    try {
+      final token = await _client.getToken();
+      if (token == null) return null;
+      final response = await _client.dio.get('/users/me');
+      final data = response.data;
+      return UserModel(
+        id: data['id'],
+        name: data['name'],
+        email: data['email'],
+        role: data['role'],
+        avatar: data['avatar'],
+        isActive: data['is_active'] ?? true,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 }

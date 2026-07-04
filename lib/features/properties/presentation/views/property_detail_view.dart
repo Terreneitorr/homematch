@@ -18,6 +18,22 @@ class PropertyDetailView extends StatelessWidget {
     return '\$${price.toStringAsFixed(0)}';
   }
 
+  void _showScheduleSheet(BuildContext context, ThemeData theme) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _ScheduleSheet(
+        theme: theme,
+        propertyId: property.id,
+        sellerId: property.ownerId,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -285,7 +301,7 @@ class PropertyDetailView extends StatelessWidget {
           children: [
             Expanded(
               child: OutlinedButton(
-                onPressed: () {},
+                onPressed: () => _showScheduleSheet(context, theme),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(0, 48),
                   side: BorderSide(color: theme.colorScheme.primary),
@@ -334,11 +350,11 @@ class CircleButton extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLowest.withOpacity(0.9),
+          color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.9),
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: theme.colorScheme.shadow.withOpacity(0.1),
+              color: theme.colorScheme.shadow.withValues(alpha: 0.1),
               blurRadius: 8,
             ),
           ],
@@ -426,5 +442,184 @@ class _FeatureChip extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _ScheduleSheet extends StatefulWidget {
+  final ThemeData theme;
+  final String propertyId;
+  final String sellerId;
+  const _ScheduleSheet(
+      {required this.theme, required this.propertyId, required this.sellerId});
+
+  @override
+  State<_ScheduleSheet> createState() => _ScheduleSheetState();
+}
+
+class _ScheduleSheetState extends State<_ScheduleSheet> {
+DateTime? _selectedDate;
+TimeOfDay? _selectedTime;
+String _type = 'presencial';
+bool _loading = false;
+
+@override
+Widget build(BuildContext context) {
+final theme = widget.theme;
+
+return Padding(
+padding: EdgeInsets.only(
+bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+left: 24,
+right: 24,
+top: 16,
+),
+child: Column(
+mainAxisSize: MainAxisSize.min,
+crossAxisAlignment: CrossAxisAlignment.start,
+children: [
+Center(
+child: Container(
+width: 40,
+height: 4,
+decoration: BoxDecoration(
+color: theme.colorScheme.outlineVariant,
+borderRadius: BorderRadius.circular(2),
+),
+),
+),
+const SizedBox(height: 20),
+Text('Agendar visita', style: theme.textTheme.titleLarge),
+const SizedBox(height: 20),
+// Tipo
+Text('Tipo de visita',
+style: theme.textTheme.labelLarge?.copyWith(
+color: theme.colorScheme.onSurfaceVariant,
+)),
+const SizedBox(height: 8),
+Row(
+children: ['presencial', 'virtual', 'telefonica'].map((t) {
+final sel = _type == t;
+final label = t == 'presencial'
+? 'Presencial'
+: t == 'virtual'
+? 'Virtual'
+: 'Telefónica';
+return Expanded(
+child: Padding(
+padding: EdgeInsets.only(right: t != 'telefonica' ? 8 : 0),
+child: GestureDetector(
+onTap: () => setState(() => _type = t),
+child: Container(
+padding: const EdgeInsets.symmetric(vertical: 10),
+decoration: BoxDecoration(
+color: sel
+? theme.colorScheme.primaryContainer
+: theme.colorScheme.surfaceContainerLowest,
+borderRadius: BorderRadius.circular(8),
+border: Border.all(
+color: sel
+? theme.colorScheme.primary
+: theme.colorScheme.outlineVariant,
+),
+),
+child: Text(label,
+textAlign: TextAlign.center,
+style: theme.textTheme.labelSmall?.copyWith(
+color: sel
+? theme.colorScheme.onPrimaryContainer
+: theme.colorScheme.onSurfaceVariant,
+fontWeight:
+sel ? FontWeight.w600 : FontWeight.normal,
+)),
+),
+),
+),
+);
+}).toList(),
+),
+const SizedBox(height: 16),
+// Fecha
+Text('Fecha y hora',
+style: theme.textTheme.labelLarge?.copyWith(
+color: theme.colorScheme.onSurfaceVariant,
+)),
+const SizedBox(height: 8),
+Row(
+children: [
+Expanded(
+child: OutlinedButton.icon(
+onPressed: () async {
+final date = await showDatePicker(
+context: context,
+initialDate: DateTime.now().add(const Duration(days: 1)),
+firstDate: DateTime.now(),
+lastDate: DateTime.now().add(const Duration(days: 90)),
+);
+if (date != null) setState(() => _selectedDate = date);
+},
+icon: Icon(Icons.calendar_today,
+size: 16, color: theme.colorScheme.primary),
+label: Text(
+_selectedDate == null
+? 'Seleccionar fecha'
+: '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+style: theme.textTheme.labelMedium,
+),
+style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+),
+),
+const SizedBox(width: 8),
+Expanded(
+child: OutlinedButton.icon(
+onPressed: () async {
+final time = await showTimePicker(
+context: context,
+initialTime: TimeOfDay.now(),
+);
+if (time != null) setState(() => _selectedTime = time);
+},
+              icon: Icon(Icons.access_time,
+                  size: 16, color: theme.colorScheme.primary),
+              label: Text(
+                _selectedTime == null
+                    ? 'Seleccionar hora'
+                    : _selectedTime!.format(context),
+                style: theme.textTheme.labelMedium,
+              ),
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 24),
+      SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: (_selectedDate == null || _selectedTime == null || _loading)
+              ? null
+              : () async {
+                  setState(() => _loading = true);
+                  await Future.delayed(const Duration(seconds: 1));
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Cita agendada con éxito')),
+                    );
+                  }
+                },
+          child: _loading
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Confirmar Cita'),
+        ),
+      ),
+      const SizedBox(height: 16),
+    ],
+  ),
+);
   }
 }
