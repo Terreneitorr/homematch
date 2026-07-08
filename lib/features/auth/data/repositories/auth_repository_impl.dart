@@ -4,12 +4,11 @@ import '../datasources/auth_remote_datasource.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource remoteDataSource;
-
   AuthRepositoryImpl(this.remoteDataSource);
 
   @override
-  Future<UserEntity> loginWithGoogle() async {
-    return await remoteDataSource.loginWithGoogle();
+  Future<UserEntity> loginWithGoogle({String role = 'USER'}) async {
+    return await remoteDataSource.loginWithGoogle(role: role);
   }
 
   @override
@@ -19,6 +18,6 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<UserEntity?> getCurrentUser() async {
-    return null;
+    return await remoteDataSource.getCurrentUser();
   }
 }

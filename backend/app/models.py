@@ -1,8 +1,9 @@
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Enum, ForeignKey, Text
+from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Enum, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 import enum
+from datetime import datetime
 
 class UserRole(str, enum.Enum):
     USER = "USER"
@@ -53,7 +54,7 @@ class Property(Base):
     has_garage = Column(Boolean, default=False)
     has_garden = Column(Boolean, default=False)
     area = Column(Float, nullable=False)
-    photos = Column(String, default="[]")
+    photos = Column(JSON, default=list)
     cluster = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
@@ -78,3 +79,29 @@ class SearchHistory(Base):
     searched_at = Column(DateTime, server_default=func.now())
 
     user = relationship("User", back_populates="history")
+
+class AppointmentType(str, enum.Enum):
+    presencial = "presencial"
+    virtual = "virtual"
+    telefonica = "telefonica"
+
+class AppointmentStatus(str, enum.Enum):
+    pendiente = "pendiente"
+    confirmada = "confirmada"
+    cancelada = "cancelada"
+    rechazada = "rechazada"
+    reagendada = "reagendada"
+
+class Appointment(Base):
+    __tablename__ = "appointments"
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    seller_id = Column(String, nullable=False)
+    property_id = Column(String, ForeignKey("properties.id"), nullable=False)
+    appointment_type = Column(
+        Enum(AppointmentType), default=AppointmentType.presencial)
+    status = Column(
+        Enum(AppointmentStatus), default=AppointmentStatus.pendiente)
+    scheduled_at = Column(DateTime, nullable=False)
+    notes = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

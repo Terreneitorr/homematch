@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/network/upload_service.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 
 class EditProfileView extends StatefulWidget {
@@ -13,6 +16,9 @@ class EditProfileView extends StatefulWidget {
 class _EditProfileViewState extends State<EditProfileView> {
   late TextEditingController _nameCtrl;
   bool _loading = false;
+  File? _avatarFile;
+  final _picker = ImagePicker();
+  final _uploadService = UploadService();
 
   @override
   void initState() {
@@ -27,14 +33,31 @@ class _EditProfileViewState extends State<EditProfileView> {
     super.dispose();
   }
 
+  Future<void> _pickAvatar() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 400,
+    );
+    if (picked != null) {
+      setState(() => _avatarFile = File(picked.path));
+    }
+  }
+
   Future<void> _save() async {
     if (_nameCtrl.text.trim().isEmpty) return;
     setState(() => _loading = true);
     try {
+      String? avatarUrl;
+      if (_avatarFile != null) {
+        avatarUrl = await _uploadService.uploadImage(_avatarFile!);
+      }
+
       await DioClient().dio.put('/users/me', data: {
         'name': _nameCtrl.text.trim(),
+        if (avatarUrl != null) 'avatar': avatarUrl,
       });
-      await context.read<AuthViewModel>().updateUser(_nameCtrl.text.trim());
+      await context.read<AuthViewModel>().refreshUser();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -88,41 +111,51 @@ class _EditProfileViewState extends State<EditProfileView> {
         children: [
           // Avatar
           Center(
-            child: Stack(
-              children: [
-                CircleAvatar(
-                  radius: 48,
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                  child: Text(
-                    user?.name.substring(0, 1).toUpperCase() ?? 'U',
-                    style: theme.textTheme.displaySmall?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.bold,
-                    ),
+            child: GestureDetector(
+              onTap: _pickAvatar,
+              child: Stack(
+                children: [
+                  CircleAvatar(
+                    radius: 48,
+                    backgroundColor: theme.colorScheme.primaryContainer,
+                    backgroundImage: _avatarFile != null
+                        ? FileImage(_avatarFile!) as ImageProvider
+                        : (user?.avatar != null && user!.avatar!.isNotEmpty)
+                        ? NetworkImage(user.avatar!)
+                        : null,
+                    child: (_avatarFile == null && (user?.avatar == null || user!.avatar!.isEmpty))
+                        ? Text(
+                      user?.name.substring(0, 1).toUpperCase() ?? 'U',
+                      style: theme.textTheme.displaySmall?.copyWith(
+                        color: theme.colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                        : null,
                   ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: theme.colorScheme.surfaceContainerLowest,
-                        width: 2,
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.surfaceContainerLowest,
+                          width: 2,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.camera_alt,
+                        size: 16,
+                        color: theme.colorScheme.onPrimary,
                       ),
                     ),
-                    child: Icon(
-                      Icons.camera_alt,
-                      size: 16,
-                      color: theme.colorScheme.onPrimary,
-                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 32),

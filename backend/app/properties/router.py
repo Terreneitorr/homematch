@@ -7,6 +7,7 @@ from app.auth.dependencies import get_current_user
 from app.models import User
 from app.properties.schemas import PropertyCreate, PropertyUpdate, PropertyResponse
 import uuid
+import json
 
 router = APIRouter()
 
@@ -47,7 +48,7 @@ def create_property(
 ):
     prop = Property(
         id=str(uuid.uuid4()),
-        owner_id=current_user.id,
+        owner_id=current_user.id,  # <- siempre del token, no del body
         title=data.title,
         description=data.description,
         price=data.price,
@@ -60,6 +61,7 @@ def create_property(
         has_garage=data.has_garage,
         has_garden=data.has_garden,
         area=data.area,
+        photos=data.photos if data.photos else [],
     )
     db.add(prop)
     db.commit()

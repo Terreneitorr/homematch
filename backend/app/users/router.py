@@ -16,7 +16,7 @@ class UserResponse(BaseModel):
     name: str
     email: str
     role: str
-    avatar: Optional[str]
+    avatar: Optional[str] = None
     is_active: bool
 
     class Config:

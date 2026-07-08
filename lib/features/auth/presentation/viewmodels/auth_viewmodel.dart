@@ -9,7 +9,7 @@ enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
 class AuthViewModel extends ChangeNotifier {
   final LoginWithGoogleUseCase loginWithGoogleUseCase;
   final LogoutUseCase logoutUseCase;
-  final AuthRemoteDataSource _dataSource = AuthRemoteDataSourceImpl();
+  final AuthRemoteDataSourceImpl _dataSource = AuthRemoteDataSourceImpl();
 
   AuthViewModel({
     required this.loginWithGoogleUseCase,
@@ -27,50 +27,73 @@ class AuthViewModel extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> _checkSession() async {
-    _status = AuthStatus.loading;
-    notifyListeners();
     try {
-      final user = await _dataSource.getCurrentUser();
-      if (user != null) {
+      final token = await _dataSource.getStoredToken();
+      if (token == null || token.isEmpty) {
+        _status = AuthStatus.unauthenticated;
+        notifyListeners();
+        return;
+      }
+      final user = await _dataSource.getCurrentUser()
+          .timeout(const Duration(seconds: 6));
+      if (user != null && user.id.isNotEmpty) {
         _user = user;
         _status = AuthStatus.authenticated;
       } else {
+        await _dataSource.clearToken();
         _status = AuthStatus.unauthenticated;
       }
     } catch (_) {
+      await _dataSource.clearToken();
       _status = AuthStatus.unauthenticated;
     }
     notifyListeners();
   }
 
-  Future<void> loginWithGoogle() async {
+  Future<void> loginWithGoogle(String role) async {
     _status = AuthStatus.loading;
     _errorMessage = null;
     notifyListeners();
+
     try {
-      _user = await loginWithGoogleUseCase();
+      _user = await _dataSource.loginWithGoogle(role: role);
       _status = AuthStatus.authenticated;
     } catch (e) {
-      _errorMessage = 'Error al iniciar sesión. Intenta de nuevo.';
-      _status = AuthStatus.error;
+      final msg = e.toString();
+      if (msg.contains('cancelado')) {
+        _status = AuthStatus.unauthenticated;
+        _errorMessage = null;
+      } else {
+        _status = AuthStatus.error;
+        _errorMessage = msg.replaceAll('Exception: ', '');
+      }
     }
     notifyListeners();
   }
 
   Future<void> logout() async {
-    await logoutUseCase();
     _user = null;
     _status = AuthStatus.unauthenticated;
+    _errorMessage = null;
     notifyListeners();
+
+    // Limpiar en background
+    try {
+      await _dataSource.logout();
+    } catch (_) {}
   }
 
-  Future<void> updateUser(String name) async {
+  Future<void> refreshUser() async {
     try {
-      final response = await _dataSource.getCurrentUser();
-      if (response != null) {
-        _user = response;
+      final user = await _dataSource.getCurrentUser();
+      if (user != null) {
+        _user = user;
         notifyListeners();
       }
     } catch (_) {}
+  }
+
+  Future<void> updateUser(String name) async {
+    await refreshUser();
   }
 }

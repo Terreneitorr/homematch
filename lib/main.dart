@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/data/datasources/auth_remote_datasource.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
@@ -10,6 +12,7 @@ import 'features/auth/domain/usecases/logout_usecase.dart';
 import 'features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import 'features/auth/presentation/views/login_view.dart';
 import 'features/auth/presentation/views/main_navigation_view.dart';
+import 'features/auth/presentation/views/splash_view.dart'; // <-- Agregado aquí
 import 'features/properties/data/datasources/property_remote_datasource.dart';
 import 'features/properties/data/repositories/property_repository_impl.dart';
 import 'features/properties/domain/usecases/get_properties_usecase.dart';
@@ -20,8 +23,10 @@ import 'features/favorites/data/repositories/favorites_repository_impl.dart';
 import 'features/favorites/presentation/viewmodels/favorites_viewmodel.dart';
 import 'features/search/presentation/viewmodels/search_viewmodel.dart';
 
-void main() {
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('es', null);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -84,21 +89,42 @@ class HomeMatchApp extends StatelessWidget {
           create: (_) => SearchViewModel(),
         ),
       ],
-      child: MaterialApp(
-        title: 'HomeMatch AI',
-        debugShowCheckedModeBanner: false,
-        theme: materialTheme.light(),
-        darkTheme: materialTheme.dark(),
-        themeMode: ThemeMode.light,
-        home: Consumer<AuthViewModel>(
-          builder: (context, authVM, _) {
-            if (authVM.status == AuthStatus.authenticated) {
-              return const MainNavigationView();
-            }
-            return const LoginView();
-          },
-        ),
+      child: Consumer<AuthViewModel>(
+        builder: (context, authVM, _) {
+          return MaterialApp(
+            title: 'HomeMatch AI',
+            debugShowCheckedModeBanner: false,
+            theme: materialTheme.light(),
+            darkTheme: materialTheme.dark(),
+            themeMode: ThemeMode.light,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [
+              Locale('es', ''),
+              Locale('en', ''),
+            ],
+            locale: const Locale('es', ''),
+            home: _getHome(authVM),
+          );
+        },
       ),
     );
+  }
+
+  Widget _getHome(AuthViewModel authVM) {
+    switch (authVM.status) {
+      case AuthStatus.initial:
+      case AuthStatus.loading:
+        return const SplashView();
+      case AuthStatus.authenticated:
+        return const MainNavigationView();
+      case AuthStatus.unauthenticated:
+      case AuthStatus.error:
+      default:
+        return const LoginView();
+    }
   }
 }

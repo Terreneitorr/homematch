@@ -12,19 +12,26 @@ class FavoritesRepositoryImpl implements FavoritesRepository {
       return (response.data as List)
           .map((f) => f['property_id'] as String)
           .toList();
-    } catch (e) {
+    } catch (_) {
       return [];
     }
   }
 
   @override
   Future<void> addFavorite(String userId, String propertyId) async {
-    await _client.dio.post('/favorites/$propertyId');
+    try {
+      await _client.dio.post('/favorites/$propertyId');
+    } on DioException catch (e) {
+      // Si ya existe (400), ignorar
+      if (e.response?.statusCode != 400) rethrow;
+    }
   }
 
   @override
   Future<void> removeFavorite(String userId, String propertyId) async {
-    await _client.dio.delete('/favorites/$propertyId');
+    try {
+      await _client.dio.delete('/favorites/$propertyId');
+    } catch (_) {}
   }
 
   @override

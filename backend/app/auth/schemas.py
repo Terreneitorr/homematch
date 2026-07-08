@@ -16,6 +16,7 @@ class GoogleLoginRequest(BaseModel):
     name: str
     email: str
     avatar: Optional[str] = None
+    role: str = "USER"
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -24,3 +25,4 @@ class TokenResponse(BaseModel):
     user_id: str
     name: str
     email: str
+    avatar: Optional[str] = None

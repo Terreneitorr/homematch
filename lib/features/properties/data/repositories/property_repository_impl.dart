@@ -23,7 +23,9 @@ class PropertyRepositoryImpl implements PropertyRepository {
       'title': property.title,
       'description': property.description,
       'price': property.price,
-      'operation_type': property.operationType == OperationType.sale ? 'sale' : 'rent',
+      'operation_type': property.operationType == OperationType.sale
+          ? 'sale'
+          : 'rent',
       'city': property.city,
       'zone': property.zone,
       'colony': property.colony,
@@ -32,6 +34,7 @@ class PropertyRepositoryImpl implements PropertyRepository {
       'has_garage': property.hasGarage,
       'has_garden': property.hasGarden,
       'area': property.area,
+      'photos': property.photos,
     });
   }
 

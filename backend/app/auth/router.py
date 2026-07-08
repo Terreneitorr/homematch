@@ -32,6 +32,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         user_id=user.id,
         name=user.name,
         email=user.email,
+        avatar=user.avatar,
     )
 
 @router.post("/login", response_model=TokenResponse)
@@ -47,22 +48,32 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         user_id=user.id,
         name=user.name,
         email=user.email,
+        avatar=user.avatar,
     )
 
 @router.post("/google", response_model=TokenResponse)
 def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
     if not user:
+        # Usuario nuevo — asignar el rol que seleccionó
+        role_map = {
+            "USER": UserRole.USER,
+            "SELLER": UserRole.SELLER,
+            "AGENCY": UserRole.AGENCY,
+            "ADMIN": UserRole.ADMIN,
+        }
+        assigned_role = role_map.get(data.role.upper(), UserRole.USER)
         user = User(
             id=data.google_id,
             name=data.name,
             email=data.email,
             avatar=data.avatar,
-            role=UserRole.USER,
+            role=assigned_role,
         )
         db.add(user)
         db.commit()
         db.refresh(user)
+    # Usuario existente — mantener su rol actual
 
     token = create_access_token({"sub": user.id, "role": user.role.value})
     return TokenResponse(
@@ -71,6 +82,7 @@ def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
         user_id=user.id,
         name=user.name,
         email=user.email,
+        avatar=user.avatar,
     )
 
 @router.post("/refresh-token", response_model=TokenResponse)
@@ -85,4 +97,5 @@ def refresh_token(
         user_id=current_user.id,
         name=current_user.name,
         email=current_user.email,
+        avatar=current_user.avatar,
     )

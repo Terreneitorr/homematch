@@ -8,7 +8,10 @@ from app.history.router import router as history_router
 from app.analytics.router import router as analytics_router
 from app.profile.router import router as profile_router
 from app.appointments.router import router as appointments_router
+from app.appointments.router import Appointment  # importa el modelo
 from app.users.router import router as users_router
+from app.uploads.router import router as uploads_router
+
 
 
 Base.metadata.create_all(bind=engine)
@@ -35,6 +38,8 @@ app.include_router(analytics_router, prefix="/analytics", tags=["Analytics"])
 app.include_router(profile_router, prefix="/profile", tags=["Profile"])
 app.include_router(appointments_router, prefix="/appointments", tags=["Appointments"])
 app.include_router(users_router, prefix="/users", tags=["Users"])
+app.include_router(uploads_router, prefix="/uploads", tags=["Uploads"])
+
 
 
 @app.get("/")

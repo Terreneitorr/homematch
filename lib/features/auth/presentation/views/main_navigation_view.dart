@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:homematch_ai/features/analytics/presentation/views/analytics_view.dart' hide AnalyticsView;
 import 'package:provider/provider.dart';
@@ -14,29 +15,50 @@ import '../../../analytics/presentation/views/analytics_view.dart';
 import '../../../../features/profile/presentation/views/edit_profile_view.dart';
 import '../../../../features/history/presentation/views/history_view.dart';
 import '../../../properties/presentation/views/create_property_view.dart';
+import '../../../../features/profile/presentation/views/agency_profile_view.dart';
+import '../../../../features/info/presentation/views/help_center_view.dart';
+import '../../../../features/info/presentation/views/terms_view.dart';
+import '../../../../features/info/presentation/views/privacy_view.dart';
 import '../../../../core/network/dio_client.dart';
 
 class MainNavigationView extends StatefulWidget {
   const MainNavigationView({super.key});
 
   @override
-  State<MainNavigationView> createState() => _MainNavigationViewState();
+  State<MainNavigationView> createState() => MainNavigationViewState();
 }
 
-class _MainNavigationViewState extends State<MainNavigationView> {
+class MainNavigationViewState extends State<MainNavigationView> {
   int _currentIndex = 0;
+
+  void goToTab(int index) {
+    setState(() => _currentIndex = index);
+  }
 
   @override
   void initState() {
     super.initState();
     Future.microtask(() async {
       if (!mounted) return;
+
+      final authVM = context.read<AuthViewModel>();
+
+      // Si el usuario está vacío, hacer logout y regresar al login
+      if (authVM.user == null || authVM.user!.id.isEmpty) {
+        await authVM.logout();
+        return;
+      }
+
       final propVM = context.read<PropertyViewModel>();
       final favVM = context.read<FavoritesViewModel>();
-      final authVM = context.read<AuthViewModel>();
+
       await propVM.loadProperties();
-      await favVM.loadFavorites(
-          authVM.user?.id ?? '', propVM.properties);
+      if (propVM.properties.isNotEmpty) {
+        await favVM.loadFavorites(
+          authVM.user?.id ?? '',
+          propVM.properties,
+        );
+      }
     });
   }
 
@@ -45,7 +67,7 @@ class _MainNavigationViewState extends State<MainNavigationView> {
       case 'SELLER':
         return const [PropertiesView(), _SellerDashboard(), _ProfileView()];
       case 'AGENCY':
-        return const [PropertiesView(), _AgencyDashboard(), _ProfileView()];
+        return const [PropertiesView(), _AgencyDashboard(), AgencyProfileView()];
       case 'ADMIN':
         return const [PropertiesView(), _AdminPanel(), _ProfileView()];
       default:
@@ -259,69 +281,615 @@ class _SellerDashboardState extends State<_SellerDashboard> {
 }
 
 // ─── AGENCY DASHBOARD ────────────────────────────────────────────
-class _AgencyDashboard extends StatelessWidget {
+class _AgencyDashboard extends StatefulWidget {
   const _AgencyDashboard();
+
+  @override
+  State<_AgencyDashboard> createState() => _AgencyDashboardState();
+}
+
+class _AgencyDashboardState extends State<_AgencyDashboard> {
+  Map<String, dynamic> _stats = {
+    'properties': 0,
+    'active': 0,
+    'appointments': 0,
+    'total_views': 0,
+  };
+  List<dynamic> _recentProperties = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final propRes = await DioClient().dio.get('/properties/');
+      final aptRes = await DioClient().dio.get('/appointments/');
+      final analyticsRes = await DioClient().dio.get('/analytics/');
+      final userId = context.read<AuthViewModel>().user?.id ?? '';
+
+      final props = (propRes.data as List)
+          .where((p) => p['owner_id'] == userId)
+          .toList();
+      final active = props.where((p) => p['status'] == 'available').length;
+
+      setState(() {
+        _stats = {
+          'properties': props.length,
+          'active': active,
+          'appointments': (aptRes.data as List).length,
+          'total_views': analyticsRes.data['total_properties'] ?? 0,
+        };
+        _recentProperties = props.take(3).toList();
+        _loading = false;
+      });
+    } catch (_) {
+      setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Dashboard Inmobiliaria', style: theme.textTheme.titleLarge),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh, color: theme.colorScheme.primary),
+            onPressed: () { setState(() => _loading = true); _load(); },
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Estadísticas', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 12),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.4,
-              children: [
-                _StatCard(theme: theme, icon: Icons.home_work, value: '0', label: 'Propiedades', color: theme.colorScheme.primary),
-                _StatCard(theme: theme, icon: Icons.people, value: '0', label: 'Agentes', color: theme.colorScheme.secondary),
-                _StatCard(theme: theme, icon: Icons.calendar_today, value: '0', label: 'Citas', color: theme.colorScheme.tertiary),
-                _StatCard(theme: theme, icon: Icons.person, value: '0', label: 'Clientes', color: theme.colorScheme.error),
+      body: _loading
+          ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
+          : RefreshIndicator(
+        onRefresh: _load,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Stats grid
+              Text('Estadísticas', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 12),
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.4,
+                children: [
+                  _StatCard(
+                    theme: theme,
+                    icon: Icons.home_work,
+                    value: '${_stats['properties']}',
+                    label: 'Propiedades',
+                    color: theme.colorScheme.primary,
+                  ),
+                  _StatCard(
+                    theme: theme,
+                    icon: Icons.check_circle,
+                    value: '${_stats['active']}',
+                    label: 'Activas',
+                    color: theme.colorScheme.secondary,
+                  ),
+                  _StatCard(
+                    theme: theme,
+                    icon: Icons.calendar_today,
+                    value: '${_stats['appointments']}',
+                    label: 'Citas',
+                    color: theme.colorScheme.tertiary,
+                  ),
+                  _StatCard(
+                    theme: theme,
+                    icon: Icons.bar_chart,
+                    value: '${_stats['total_views']}',
+                    label: 'En plataforma',
+                    color: theme.colorScheme.error,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Propiedades recientes
+              if (_recentProperties.isNotEmpty) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Mis propiedades recientes',
+                        style: theme.textTheme.titleMedium),
+                    TextButton(
+                      onPressed: () {},
+                      child: Text('Ver todas',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.primary,
+                          )),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ..._recentProperties.map((prop) => _PropertyListItem(
+                  theme: theme,
+                  prop: prop,
+                )),
+                const SizedBox(height: 16),
               ],
-            ),
-            const SizedBox(height: 24),
-            Text('Gestión', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 12),
-            _ActionTile(theme: theme, icon: Icons.people_alt, title: 'Gestionar agentes', subtitle: 'Administra tu equipo'),
-            _ActionTile(theme: theme, icon: Icons.bar_chart, title: 'Reportes', subtitle: 'Estadísticas avanzadas'),
-            _ActionTile(theme: theme, icon: Icons.verified, title: 'Cuenta verificada', subtitle: 'Estado de verificación'),
+
+              // Acciones rápidas
+              Text('Acciones rápidas', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 12),
+              _ActionTile(
+                theme: theme,
+                icon: Icons.add_home,
+                title: 'Publicar propiedad',
+                subtitle: 'Agrega una nueva publicación',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const CreatePropertyView())),
+              ),
+              _ActionTile(
+                theme: theme,
+                icon: Icons.calendar_month,
+                title: 'Ver citas',
+                subtitle: 'Gestiona visitas agendadas',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const AppointmentsView())),
+              ),
+              _ActionTile(
+                theme: theme,
+                icon: Icons.analytics_outlined,
+                title: 'Estadísticas del mercado',
+                subtitle: 'Métricas y tendencias de la plataforma',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const AnalyticsView())),
+              ),
+              _ActionTile(
+                theme: theme,
+                icon: Icons.verified_outlined,
+                title: 'Estado de verificación',
+                subtitle: 'Verifica el estado de tu cuenta',
+                onTap: () => _showVerificationDialog(context, theme),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showVerificationDialog(BuildContext context, ThemeData theme) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.verified, color: theme.colorScheme.secondary),
+            const SizedBox(width: 8),
+            const Text('Verificación'),
           ],
         ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle,
+                      color: theme.colorScheme.secondary, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Cuenta activa',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSecondaryContainer,
+                        fontWeight: FontWeight.w600,
+                      )),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Tu cuenta de inmobiliaria está activa. Para obtener el sello de verificación, contacta al administrador.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PropertyListItem extends StatelessWidget {
+  final ThemeData theme;
+  final Map<String, dynamic> prop;
+
+  const _PropertyListItem({required this.theme, required this.prop});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = prop['status'] ?? 'available';
+    Color statusColor;
+    String statusLabel;
+
+    switch (status) {
+      case 'reserved':
+        statusColor = theme.colorScheme.tertiary;
+        statusLabel = 'Reservada';
+        break;
+      case 'sold':
+      case 'rented':
+        statusColor = theme.colorScheme.outline;
+        statusLabel = status == 'sold' ? 'Vendida' : 'Rentada';
+        break;
+      default:
+        statusColor = theme.colorScheme.secondary;
+        statusLabel = 'Disponible';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.home_work_outlined,
+                size: 24, color: theme.colorScheme.outline),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  prop['title'] ?? '',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '\$${prop['price']}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: statusColor.withOpacity(0.4)),
+            ),
+            child: Text(
+              statusLabel,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: statusColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 // ─── ADMIN PANEL ──────────────────────────────────────────────────
-class _AdminPanel extends StatelessWidget {
+class _AdminPanel extends StatefulWidget {
   const _AdminPanel();
+
+  @override
+  State<_AdminPanel> createState() => _AdminPanelState();
+}
+
+class _AdminPanelState extends State<_AdminPanel> {
+  List<dynamic> _users = [];
+  Map<String, dynamic> _analytics = {};
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final usersRes = await DioClient().dio.get('/users/');
+      final analyticsRes = await DioClient().dio.get('/analytics/');
+      setState(() {
+        _users = usersRes.data;
+        _analytics = analyticsRes.data;
+        _loading = false;
+      });
+    } catch (_) {
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _toggleUser(String userId, bool currentStatus) async {
+    try {
+      await DioClient().dio.put('/users/$userId/toggle-active');
+      _load();
+    } catch (_) {}
+  }
+
+  Future<void> _changeRole(BuildContext context, ThemeData theme, String userId) async {
+    final roles = ['USER', 'SELLER', 'AGENCY', 'ADMIN'];
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Cambiar rol'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: roles.map((r) => ListTile(
+            title: Text(r),
+            onTap: () => Navigator.pop(context, r),
+          )).toList(),
+        ),
+      ),
+    );
+    if (selected != null) {
+      try {
+        await DioClient().dio.put(
+          '/users/$userId/role',
+          queryParameters: {'role': selected},
+        );
+        _load();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Rol actualizado a $selected'),
+              backgroundColor: theme.colorScheme.secondary,
+            ),
+          );
+        }
+      } catch (_) {}
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Administración', style: theme.textTheme.titleLarge),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh, color: theme.colorScheme.primary),
+            onPressed: () { setState(() => _loading = true); _load(); },
+          ),
+        ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: _loading
+          ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
+          : RefreshIndicator(
+        onRefresh: _load,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Stats globales
+              Text('Estadísticas globales',
+                  style: theme.textTheme.titleMedium),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _StatCard(
+                    theme: theme,
+                    icon: Icons.people,
+                    value: '${_users.length}',
+                    label: 'Usuarios',
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  _StatCard(
+                    theme: theme,
+                    icon: Icons.home_work,
+                    value: '${_analytics['total_properties'] ?? 0}',
+                    label: 'Propiedades',
+                    color: theme.colorScheme.secondary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Lista de usuarios
+              Text('Gestión de usuarios',
+                  style: theme.textTheme.titleMedium),
+              const SizedBox(height: 12),
+              ..._users.map((user) => _UserAdminCard(
+                theme: theme,
+                user: user,
+                onToggle: () => _toggleUser(
+                    user['id'], user['is_active'] ?? true),
+                onChangeRole: () =>
+                    _changeRole(context, theme, user['id']),
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserAdminCard extends StatelessWidget {
+  final ThemeData theme;
+  final Map<String, dynamic> user;
+  final VoidCallback onToggle;
+  final VoidCallback onChangeRole;
+
+  const _UserAdminCard({
+    required this.theme,
+    required this.user,
+    required this.onToggle,
+    required this.onChangeRole,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = user['is_active'] ?? true;
+    final role = user['role'] ?? 'USER';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isActive
+              ? theme.colorScheme.outlineVariant
+              : theme.colorScheme.error.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ActionTile(theme: theme, icon: Icons.people, title: 'Gestionar usuarios', subtitle: 'Ver, bloquear o activar cuentas', iconColor: theme.colorScheme.error),
-          _ActionTile(theme: theme, icon: Icons.verified_user, title: 'Validar inmobiliarias', subtitle: 'Aprobar cuentas de agencias', iconColor: theme.colorScheme.error),
-          _ActionTile(theme: theme, icon: Icons.report, title: 'Contenido reportado', subtitle: 'Revisar publicaciones reportadas', iconColor: theme.colorScheme.error),
-          _ActionTile(theme: theme, icon: Icons.block, title: 'Cuentas bloqueadas', subtitle: 'Gestionar bloqueos', iconColor: theme.colorScheme.error),
-          _ActionTile(theme: theme, icon: Icons.analytics, title: 'Estadísticas globales', subtitle: 'Métricas de la plataforma', iconColor: theme.colorScheme.error),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: isActive
+                    ? theme.colorScheme.primaryContainer
+                    : theme.colorScheme.errorContainer,
+                child: Text(
+                  (user['name'] ?? 'U').substring(0, 1).toUpperCase(),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: isActive
+                        ? theme.colorScheme.onPrimaryContainer
+                        : theme.colorScheme.onErrorContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user['name'] ?? '',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      user['email'] ?? '',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  role,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onChangeRole,
+                  icon: Icon(Icons.manage_accounts,
+                      size: 14, color: theme.colorScheme.primary),
+                  label: Text('Cambiar rol',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                      )),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    side: BorderSide(color: theme.colorScheme.outlineVariant),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onToggle,
+                  icon: Icon(
+                    isActive ? Icons.block : Icons.check_circle_outline,
+                    size: 14,
+                    color: isActive
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.secondary,
+                  ),
+                  label: Text(
+                    isActive ? 'Bloquear' : 'Activar',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: isActive
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.secondary,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    side: BorderSide(
+                      color: isActive
+                          ? theme.colorScheme.error.withOpacity(0.5)
+                          : theme.colorScheme.secondary.withOpacity(0.5),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -368,15 +936,20 @@ class _ProfileView extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 40,
-                    backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    child: Text(
+                    backgroundColor: theme.colorScheme.primaryContainer,
+                    backgroundImage: (user?.avatar != null && user!.avatar!.isNotEmpty)
+                        ? NetworkImage(user.avatar!)
+                        : null,
+                    child: (user?.avatar == null || user!.avatar!.isEmpty)
+                        ? Text(
                       user?.name.substring(0, 1).toUpperCase() ?? 'U',
                       style: GoogleFonts.playfairDisplay(
                         fontSize: 36,
-                        color: Colors.white,
+                        color: theme.colorScheme.onPrimaryContainer,
                         fontWeight: FontWeight.bold,
                       ),
-                    ),
+                    )
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -446,9 +1019,38 @@ class _ProfileView extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   _SectionHeader(theme: theme, title: 'Soporte'),
-                  _ProfileTile(theme: theme, icon: Icons.help_outline, title: 'Centro de ayuda'),
-                  _ProfileTile(theme: theme, icon: Icons.description_outlined, title: 'Términos y condiciones'),
-                  _ProfileTile(theme: theme, icon: Icons.privacy_tip_outlined, title: 'Política de privacidad'),
+                  _ProfileTile(
+                    theme: theme,
+                    icon: Icons.help_outline,
+                    title: 'Centro de ayuda',
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const HelpCenterView())),
+                  ),
+                  _ProfileTile(
+                    theme: theme,
+                    icon: Icons.description_outlined,
+                    title: 'Términos y condiciones',
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const TermsView())),
+                  ),
+                  _ProfileTile(
+                    theme: theme,
+                    icon: Icons.privacy_tip_outlined,
+                    title: 'Política de privacidad',
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const PrivacyView())),
+                  ),
+                  _ProfileTile(
+                    theme: theme,
+                    icon: Icons.star_outline,
+                    title: 'Calificar la app',
+                    onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Próximamente en Play Store')),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   _SectionHeader(theme: theme, title: 'Sesión'),
                   const SizedBox(height: 8),
@@ -616,19 +1218,20 @@ class _ProfileTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
         color: theme.colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(10),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: theme.colorScheme.primary, size: 20),
-        title: Text(title, style: theme.textTheme.bodyMedium),
-        trailing: Icon(Icons.arrow_forward_ios,
-            size: 12, color: theme.colorScheme.outline),
-        onTap: onTap,
-        dense: true,
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          leading: Icon(icon, color: theme.colorScheme.primary, size: 20),
+          title: Text(title, style: theme.textTheme.bodyMedium),
+          trailing: Icon(Icons.arrow_forward_ios,
+              size: 12, color: theme.colorScheme.outline),
+          onTap: onTap,
+          dense: true,
+        ),
       ),
     );
   }

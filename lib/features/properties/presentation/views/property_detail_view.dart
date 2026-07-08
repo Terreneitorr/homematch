@@ -1,8 +1,11 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:homematch_ai/core/network/dio_client.dart';
+import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../domain/entities/property_entity.dart';
 
-class PropertyDetailView extends StatelessWidget {
+class PropertyDetailView extends StatefulWidget {
   final PropertyEntity property;
   final String? segmento;
 
@@ -11,6 +14,13 @@ class PropertyDetailView extends StatelessWidget {
     required this.property,
     this.segmento,
   });
+
+  @override
+  State<PropertyDetailView> createState() => _PropertyDetailViewState();
+}
+
+class _PropertyDetailViewState extends State<PropertyDetailView> {
+  int _currentPage = 0;
 
   String _formatPrice(double price) {
     if (price >= 1000000) return '\$${(price / 1000000).toStringAsFixed(2)}M';
@@ -28,8 +38,8 @@ class PropertyDetailView extends StatelessWidget {
       ),
       builder: (_) => _ScheduleSheet(
         theme: theme,
-        propertyId: property.id,
-        sellerId: property.ownerId,
+        propertyId: widget.property.id,
+        sellerId: widget.property.ownerId,
       ),
     );
   }
@@ -37,10 +47,10 @@ class PropertyDetailView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isRent = property.operationType == OperationType.rent;
+    final isRent = widget.property.operationType == OperationType.rent;
     final price = isRent
-        ? '${_formatPrice(property.price)}/mes'
-        : _formatPrice(property.price);
+        ? '${_formatPrice(widget.property.price)}/mes'
+        : _formatPrice(widget.property.price);
 
     return Scaffold(
       body: CustomScrollView(
@@ -72,14 +82,58 @@ class PropertyDetailView extends StatelessWidget {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Container(
-                    color: theme.colorScheme.surfaceContainerHigh,
-                    child: Icon(
-                      Icons.home_work_rounded,
-                      size: 80,
-                      color: theme.colorScheme.outlineVariant,
+                  if (widget.property.photos.isNotEmpty)
+                    PageView.builder(
+                      itemCount: widget.property.photos.length,
+                      onPageChanged: (index) =>
+                          setState(() => _currentPage = index),
+                      itemBuilder: (context, index) {
+                        return CachedNetworkImage(
+                          imageUrl: widget.property.photos[index],
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(
+                            color: theme.colorScheme.surfaceContainerHigh,
+                            child: Icon(Icons.home_work_rounded,
+                                size: 80,
+                                color: theme.colorScheme.outlineVariant),
+                          ),
+                          errorWidget: (_, __, ___) => Container(
+                            color: theme.colorScheme.surfaceContainerHigh,
+                            child: Icon(Icons.home_work_rounded,
+                                size: 80,
+                                color: theme.colorScheme.outlineVariant),
+                          ),
+                        );
+                      },
+                    )
+                  else
+                    Container(
+                      color: theme.colorScheme.surfaceContainerHigh,
+                      child: Icon(Icons.home_work_rounded,
+                          size: 80, color: theme.colorScheme.outlineVariant),
                     ),
-                  ),
+                  // Indicador de fotos
+                  if (widget.property.photos.length > 1)
+                    Positioned(
+                      bottom: 16,
+                      right: 16,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_currentPage + 1} / ${widget.property.photos.length}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
                   // Badge
                   Positioned(
                     bottom: 16,
@@ -127,7 +181,7 @@ class PropertyDetailView extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    property.title,
+                    widget.property.title,
                     style: theme.textTheme.headlineSmall?.copyWith(
                       color: theme.colorScheme.onSurface,
                       fontWeight: FontWeight.w600,
@@ -140,7 +194,7 @@ class PropertyDetailView extends StatelessWidget {
                           size: 16, color: theme.colorScheme.outline),
                       const SizedBox(width: 4),
                       Text(
-                        '${property.zone}, ${property.city}',
+                        '${widget.property.zone}, ${widget.property.city}',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -149,7 +203,7 @@ class PropertyDetailView extends StatelessWidget {
                   ),
 
                   // Tag IA
-                  if (segmento != null) ...[
+                  if (widget.segmento != null) ...[
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -166,7 +220,7 @@ class PropertyDetailView extends StatelessWidget {
                               color: theme.colorScheme.onSecondaryContainer),
                           const SizedBox(width: 6),
                           Text(
-                            'IA: $segmento',
+                            'IA: ${widget.segmento}',
                             style: theme.textTheme.labelMedium?.copyWith(
                               color: theme.colorScheme.onSecondaryContainer,
                               fontWeight: FontWeight.w600,
@@ -188,24 +242,24 @@ class PropertyDetailView extends StatelessWidget {
                       _StatItem(
                         theme: theme,
                         icon: Icons.bed_outlined,
-                        value: '${property.bedrooms}',
+                        value: '${widget.property.bedrooms}',
                         label: 'Habitaciones',
                       ),
                       _Divider(theme: theme),
                       _StatItem(
                         theme: theme,
                         icon: Icons.bathtub_outlined,
-                        value: '${property.bathrooms}',
+                        value: '${widget.property.bathrooms}',
                         label: 'Baños',
                       ),
                       _Divider(theme: theme),
                       _StatItem(
                         theme: theme,
                         icon: Icons.square_foot,
-                        value: '${property.area.toInt()}',
+                        value: '${widget.property.area.toInt()}',
                         label: 'm²',
                       ),
-                      if (property.hasGarage) ...[
+                      if (widget.property.hasGarage) ...[
                         _Divider(theme: theme),
                         _StatItem(
                           theme: theme,
@@ -228,7 +282,7 @@ class PropertyDetailView extends StatelessWidget {
                       )),
                   const SizedBox(height: 8),
                   Text(
-                    property.description,
+                    widget.property.description,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                       height: 1.6,
@@ -252,21 +306,21 @@ class PropertyDetailView extends StatelessWidget {
                       _FeatureChip(
                           theme: theme,
                           icon: Icons.bed_outlined,
-                          label: '${property.bedrooms} habitaciones'),
+                          label: '${widget.property.bedrooms} habitaciones'),
                       _FeatureChip(
                           theme: theme,
                           icon: Icons.bathtub_outlined,
-                          label: '${property.bathrooms} baños'),
+                          label: '${widget.property.bathrooms} baños'),
                       _FeatureChip(
                           theme: theme,
                           icon: Icons.square_foot,
-                          label: '${property.area.toInt()} m²'),
-                      if (property.hasGarage)
+                          label: '${widget.property.area.toInt()} m²'),
+                      if (widget.property.hasGarage)
                         _FeatureChip(
                             theme: theme,
                             icon: Icons.garage_outlined,
                             label: 'Cochera'),
-                      if (property.hasGarden)
+                      if (widget.property.hasGarden)
                         _FeatureChip(
                             theme: theme,
                             icon: Icons.yard_outlined,
@@ -599,12 +653,38 @@ if (time != null) setState(() => _selectedTime = time);
               ? null
               : () async {
                   setState(() => _loading = true);
-                  await Future.delayed(const Duration(seconds: 1));
-                  if (mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Cita agendada con éxito')),
-                    );
+                  try {
+                    final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate!);
+                    final timeStr = _selectedTime!.format(context);
+                    final scheduledAt = '${dateStr}T${timeStr.padLeft(5, '0')}:00';
+
+                    await DioClient().dio.post('/appointments/', data: {
+                      'property_id': widget.propertyId,
+                      'seller_id': widget.sellerId,
+                      'appointment_type': _type,
+                      'scheduled_at': scheduledAt,
+                      'notes': '',
+                    });
+
+                    if (mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Cita agendada con éxito'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    setState(() => _loading = false);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error al agendar: ${e.toString()}'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
                   }
                 },
           child: _loading

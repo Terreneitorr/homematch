@@ -25,6 +25,7 @@ services:
       - postgres
     volumes:
       - ./backend:/app
+      - uploads_data:/app/uploads
 
   ml-service:
     build: ./ml-service
@@ -40,3 +41,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

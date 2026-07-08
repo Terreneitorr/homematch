@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:homematch_ai/features/properties/domain/entities/property_entity.dart';
 import 'package:homematch_ai/features/properties/presentation/views/property_detail_view.dart';
 
@@ -44,6 +45,19 @@ class PropertyCardGrid extends StatelessWidget {
           ),
         );
       },
+      onLongPress: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Propiedad seleccionada para comparar'),
+            action: SnackBarAction(
+              label: 'Comparar',
+              onPressed: () {
+                // Navegar al comparador si hay 2 seleccionadas
+              },
+            ),
+          ),
+        );
+      },
       child: Container(
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerLowest,
@@ -68,7 +82,32 @@ class PropertyCardGrid extends StatelessWidget {
                     topLeft: Radius.circular(12),
                     topRight: Radius.circular(12),
                   ),
-                  child: Container(
+                  child: property.photos.isNotEmpty
+                      ? CachedNetworkImage(
+                    imageUrl: property.photos.first,
+                    height: 120,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Container(
+                      height: 120,
+                      color: theme.colorScheme.surfaceContainerHigh,
+                      child: Icon(
+                        Icons.home_work_rounded,
+                        size: 40,
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                    ),
+                    errorWidget: (_, __, ___) => Container(
+                      height: 120,
+                      color: theme.colorScheme.surfaceContainerHigh,
+                      child: Icon(
+                        Icons.home_work_rounded,
+                        size: 40,
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                    ),
+                  )
+                      : Container(
                     height: 120,
                     width: double.infinity,
                     color: theme.colorScheme.surfaceContainerHigh,

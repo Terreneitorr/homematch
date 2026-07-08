@@ -1,37 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, String, DateTime, Enum as SAEnum
-from app.database import Base, get_db
-from app.models import User
+from app.database import get_db
+from app.models import User, Appointment, AppointmentStatus
 from app.auth.dependencies import get_current_user
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import uuid
-import enum
-
-class AppointmentType(str, enum.Enum):
-    presencial = "presencial"
-    virtual = "virtual"
-    telefonica = "telefonica"
-
-class AppointmentStatus(str, enum.Enum):
-    pendiente = "pendiente"
-    confirmada = "confirmada"
-    cancelada = "cancelada"
-    reagendada = "reagendada"
-
-class Appointment(Base):
-    __tablename__ = "appointments"
-    id = Column(String, primary_key=True)
-    user_id = Column(String, nullable=False)
-    seller_id = Column(String, nullable=False)
-    property_id = Column(String, nullable=False)
-    appointment_type = Column(SAEnum(AppointmentType), default=AppointmentType.presencial)
-    status = Column(SAEnum(AppointmentStatus), default=AppointmentStatus.pendiente)
-    scheduled_at = Column(DateTime, nullable=False)
-    notes = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
 
 class AppointmentCreate(BaseModel):
     property_id: str
@@ -58,8 +33,8 @@ router = APIRouter()
 
 @router.get("/", response_model=List[AppointmentResponse])
 def get_appointments(
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     return db.query(Appointment).filter(
         (Appointment.user_id == current_user.id) |
@@ -68,9 +43,9 @@ def get_appointments(
 
 @router.post("/", response_model=AppointmentResponse)
 def create_appointment(
-        data: AppointmentCreate,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+    data: AppointmentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     appointment = Appointment(
         id=str(uuid.uuid4()),
@@ -86,29 +61,49 @@ def create_appointment(
     db.refresh(appointment)
     return appointment
 
-@router.put("/{appointment_id}/status")
-def update_status(
-        appointment_id: str,
-        status: str,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
-):
-    apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
-    if not apt:
-        raise HTTPException(status_code=404, detail="Cita no encontrada")
-    apt.status = status
-    db.commit()
-    return {"message": "Estado actualizado"}
-
 @router.delete("/{appointment_id}")
 def cancel_appointment(
-        appointment_id: str,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+    appointment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    apt = db.query(Appointment).filter(
+        Appointment.id == appointment_id
+    ).first()
     if not apt:
         raise HTTPException(status_code=404, detail="No encontrada")
     apt.status = AppointmentStatus.cancelada
     db.commit()
     return {"message": "Cita cancelada"}
+
+@router.put("/{appointment_id}/status")
+def update_status(
+    appointment_id: str,
+    status: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not apt:
+        raise HTTPException(status_code=404, detail="Cita no encontrada")
+
+    # Seguridad: solo dueño o cliente
+    if current_user.id != apt.seller_id and current_user.id != apt.user_id:
+        raise HTTPException(status_code=403, detail="Sin permiso")
+
+    # Mapeo manual para evitar errores de Enum
+    status_map = {
+        "confirmada": AppointmentStatus.confirmada,
+        "rechazada": AppointmentStatus.rechazada,
+        "cancelada": AppointmentStatus.cancelada,
+        "reagendada": AppointmentStatus.reagendada,
+        "pendiente": AppointmentStatus.pendiente,
+    }
+
+    new_status = status_map.get(status.lower())
+    if not new_status:
+        raise HTTPException(status_code=400, detail=f"Estado '{status}' no es válido")
+
+    apt.status = new_status
+    db.commit()
+    return {"message": "Estado actualizado", "new_status": apt.status}

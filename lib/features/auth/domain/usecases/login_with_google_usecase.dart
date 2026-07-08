@@ -3,10 +3,9 @@ import '../repositories/auth_repository.dart';
 
 class LoginWithGoogleUseCase {
   final AuthRepository repository;
-
   LoginWithGoogleUseCase(this.repository);
 
-  Future<UserEntity> call() async {
-    return await repository.loginWithGoogle();
+  Future<UserEntity> call({String role = 'USER'}) async {
+    return await repository.loginWithGoogle(role: role);
   }
 }

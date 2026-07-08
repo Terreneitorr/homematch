@@ -15,6 +15,7 @@ class PropertyCreate(BaseModel):
     has_garage: bool = False
     has_garden: bool = False
     area: float
+    photos: List[str] = []
 
 class PropertyUpdate(BaseModel):
     title: Optional[str] = None
@@ -45,7 +46,7 @@ class PropertyResponse(BaseModel):
     has_garage: bool
     has_garden: bool
     area: float
-    photos: str
+    photos: List[str] = []
     cluster: Optional[int]
     created_at: datetime
 
