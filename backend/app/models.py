@@ -31,6 +31,7 @@ class User(Base):
     role = Column(Enum(UserRole), default=UserRole.USER)
     avatar = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
+    accepted_terms = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
 
     properties = relationship("Property", back_populates="owner")

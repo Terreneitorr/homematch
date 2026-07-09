@@ -54,6 +54,8 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 @router.post("/google", response_model=TokenResponse)
 def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
+    is_new_user = user is None
+
     if not user:
         # Usuario nuevo — asignar el rol que seleccionó
         role_map = {
@@ -69,19 +71,27 @@ def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
             email=data.email,
             avatar=data.avatar,
             role=assigned_role,
+            accepted_terms=False,
         )
         db.add(user)
         db.commit()
         db.refresh(user)
     # Usuario existente — mantener su rol actual
 
-    token = create_access_token({"sub": user.id, "role": user.role.value})
+    token = create_access_token({
+        "sub": user.id,
+        "role": user.role.value,
+        "accepted_terms": user.accepted_terms,
+    })
+
     return TokenResponse(
         access_token=token,
         role=user.role.value,
         user_id=user.id,
         name=user.name,
         email=user.email,
+        accepted_terms=user.accepted_terms,
+        is_new_user=is_new_user,
         avatar=user.avatar,
     )
 
@@ -99,3 +109,19 @@ def refresh_token(
         email=current_user.email,
         avatar=current_user.avatar,
     )
+
+@router.post("/accept-terms")
+def accept_terms(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        __import__('app.auth.dependencies',
+                   fromlist=['get_current_user']).get_current_user)
+):
+    current_user.accepted_terms = True
+    db.commit()
+    token = create_access_token({
+        "sub": current_user.id,
+        "role": current_user.role.value,
+        "accepted_terms": True,
+    })
+    return {"message": "Términos aceptados", "access_token": token}

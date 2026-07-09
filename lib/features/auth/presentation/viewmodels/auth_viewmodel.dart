@@ -26,6 +26,10 @@ class AuthViewModel extends ChangeNotifier {
   UserEntity? get user => _user;
   String? get errorMessage => _errorMessage;
 
+  bool get needsTermsAcceptance =>
+      _status == AuthStatus.authenticated &&
+          (_user?.acceptedTerms == false);
+
   Future<void> _checkSession() async {
     try {
       final token = await _dataSource.getStoredToken();
@@ -69,6 +73,23 @@ class AuthViewModel extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  Future<void> acceptTerms() async {
+    _errorMessage = null;
+    try {
+      await _dataSource.acceptTerms();
+      // Refresca el usuario completo con el nuevo token
+      final updated = await _dataSource.getCurrentUser();
+      if (updated != null) {
+        _user = updated;
+        notifyListeners();
+      }
+    } catch (e) {
+      _errorMessage = 'No se pudieron aceptar los términos. Reintenta.';
+      notifyListeners();
+      rethrow; // Lanzamos para que la vista pueda quitar el loading
+    }
   }
 
   Future<void> logout() async {

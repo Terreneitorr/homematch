@@ -12,7 +12,8 @@ import 'features/auth/domain/usecases/logout_usecase.dart';
 import 'features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import 'features/auth/presentation/views/login_view.dart';
 import 'features/auth/presentation/views/main_navigation_view.dart';
-import 'features/auth/presentation/views/splash_view.dart'; // <-- Agregado aquí
+import 'features/auth/presentation/views/splash_view.dart';
+import 'features/auth/presentation/views/terms_acceptance_view.dart';
 import 'features/properties/data/datasources/property_remote_datasource.dart';
 import 'features/properties/data/repositories/property_repository_impl.dart';
 import 'features/properties/domain/usecases/get_properties_usecase.dart';
@@ -120,6 +121,10 @@ class HomeMatchApp extends StatelessWidget {
       case AuthStatus.loading:
         return const SplashView();
       case AuthStatus.authenticated:
+        // Si no ha aceptado términos, mostrar pantalla de aceptación
+        if (!authVM.user!.acceptedTerms) {
+          return const TermsAcceptanceView();
+        }
         return const MainNavigationView();
       case AuthStatus.unauthenticated:
       case AuthStatus.error:

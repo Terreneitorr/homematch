@@ -8,16 +8,18 @@ class UserModel extends UserEntity {
     required super.role,
     super.avatar,
     required super.isActive,
+    super.acceptedTerms,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['id'],
-      name: json['name'],
-      email: json['email'],
-      role: json['role'],
+      id: json['id'] ?? json['user_id'] ?? '',
+      name: json['name'] ?? '',
+      email: json['email'] ?? '',
+      role: json['role'] ?? 'USER',
       avatar: json['avatar'],
       isActive: json['is_active'] ?? true,
+      acceptedTerms: json['accepted_terms'] ?? false,
     );
   }
 
@@ -29,6 +31,7 @@ class UserModel extends UserEntity {
       'role': role,
       'avatar': avatar,
       'is_active': isActive,
+      'accepted_terms': acceptedTerms,
     };
   }
 }

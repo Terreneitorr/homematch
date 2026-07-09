@@ -482,40 +482,46 @@ class _StepField extends StatelessWidget {
               color: theme.colorScheme.onSurfaceVariant,
             )),
         const SizedBox(height: 6),
-        Container(
-          height: 48,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.remove, size: 18,
-                    color: theme.colorScheme.primary),
-                onPressed: () {
-                  final v = int.tryParse(controller.text) ?? 1;
-                  if (v > 1) controller.text = '${v - 1}';
-                },
-              ),
-              Expanded(
-                child: StatefulBuilder(
-                  builder: (_, setState) => Text(
+        StatefulBuilder(
+          builder: (context, setLocalState) => Container(
+            height: 48,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(Icons.remove,
+                      size: 18, color: theme.colorScheme.primary),
+                  onPressed: () {
+                    final v = int.tryParse(controller.text) ?? 1;
+                    if (v > 1) {
+                      setLocalState(() {
+                        controller.text = '${v - 1}';
+                      });
+                    }
+                  },
+                ),
+                Expanded(
+                  child: Text(
                     controller.text,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleMedium,
                   ),
                 ),
-              ),
-              IconButton(
-                icon: Icon(Icons.add, size: 18,
-                    color: theme.colorScheme.primary),
-                onPressed: () {
-                  final v = int.tryParse(controller.text) ?? 1;
-                  controller.text = '${v + 1}';
-                },
-              ),
-            ],
+                IconButton(
+                  icon: Icon(Icons.add,
+                      size: 18, color: theme.colorScheme.primary),
+                  onPressed: () {
+                    final v = int.tryParse(controller.text) ?? 1;
+                    setLocalState(() {
+                      controller.text = '${v + 1}';
+                    });
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ],

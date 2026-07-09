@@ -18,6 +18,7 @@ class UserResponse(BaseModel):
     role: str
     avatar: Optional[str] = None
     is_active: bool
+    accepted_terms: bool = False
 
     class Config:
         from_attributes = True

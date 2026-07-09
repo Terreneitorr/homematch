@@ -5,6 +5,7 @@ class UserEntity {
   final String role;
   final String? avatar;
   final bool isActive;
+  final bool acceptedTerms;
 
   const UserEntity({
     required this.id,
@@ -13,5 +14,6 @@ class UserEntity {
     required this.role,
     this.avatar,
     required this.isActive,
+    this.acceptedTerms = false,
   });
 }

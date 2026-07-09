@@ -26,3 +26,5 @@ class TokenResponse(BaseModel):
     name: str
     email: str
     avatar: Optional[str] = None
+    accepted_terms: bool = False
+    is_new_user: bool = False

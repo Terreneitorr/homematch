@@ -9,6 +9,7 @@ abstract class AuthRemoteDataSource {
   Future<UserModel?> getCurrentUser();
   Future<String?> getStoredToken();
   Future<void> clearToken();
+  Future<void> acceptTerms();
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -43,21 +44,16 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       throw Exception('Error de Google Sign In: $e');
     }
 
-    if (account == null) {
-      throw Exception('Login cancelado por el usuario');
-    }
+    if (account == null) throw Exception('Login cancelado por el usuario');
 
     try {
-      final response = await _client.dio.post(
-        '/auth/google',
-        data: {
-          'google_id': account.id,
-          'name': account.displayName ?? account.email.split('@').first,
-          'email': account.email,
-          'avatar': account.photoUrl,
-          'role': role,
-        },
-      );
+      final response = await _client.dio.post('/auth/google', data: {
+        'google_id': account.id,
+        'name': account.displayName ?? account.email.split('@').first,
+        'email': account.email,
+        'avatar': account.photoUrl,
+        'role': role,
+      });
 
       final data = response.data;
       await _client.saveToken(data['access_token']);
@@ -69,13 +65,19 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         role: data['role'],
         avatar: data['avatar'],
         isActive: true,
+        acceptedTerms: data['accepted_terms'] ?? false,
       );
     } on DioException catch (e) {
-      final statusCode = e.response?.statusCode;
-      final detail = e.response?.data?['detail'] ?? e.message;
-      throw Exception('Error $statusCode: $detail');
-    } catch (e) {
-      throw Exception('Error inesperado: $e');
+      throw Exception('Error: ${e.response?.data ?? e.message}');
+    }
+  }
+
+  @override
+  Future<void> acceptTerms() async {
+    final response = await _client.dio.post('/auth/accept-terms');
+    final data = response.data;
+    if (data['access_token'] != null) {
+      await _client.saveToken(data['access_token']);
     }
   }
 
@@ -101,6 +103,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         role: data['role'],
         avatar: data['avatar'],
         isActive: data['is_active'] ?? true,
+        acceptedTerms: data['accepted_terms'] ?? false,
       );
     } catch (_) {
       return null;
