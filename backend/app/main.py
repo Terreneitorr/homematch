@@ -11,6 +11,11 @@ from app.appointments.router import router as appointments_router
 from app.appointments.router import Appointment  # importa el modelo
 from app.users.router import router as users_router
 from app.uploads.router import router as uploads_router
+from app.notifications.router import router as notifications_router, Notification
+from app.schedules.router import router as schedules_router
+from app.chat.router import router as chat_router
+from app.payments.router import router as payments_router
+
 
 
 
@@ -39,7 +44,10 @@ app.include_router(profile_router, prefix="/profile", tags=["Profile"])
 app.include_router(appointments_router, prefix="/appointments", tags=["Appointments"])
 app.include_router(users_router, prefix="/users", tags=["Users"])
 app.include_router(uploads_router, prefix="/uploads", tags=["Uploads"])
-
+app.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
+app.include_router(schedules_router, prefix="/schedules", tags=["Schedules"])
+app.include_router(chat_router, prefix="/chat", tags=["Chat"])
+app.include_router(payments_router, prefix="/payments", tags=["Payments"])
 
 
 @app.get("/")

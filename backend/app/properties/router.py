@@ -8,6 +8,8 @@ from app.models import User
 from app.properties.schemas import PropertyCreate, PropertyUpdate, PropertyResponse
 import uuid
 import json
+from app.notifications.router import Notification as NotifModel
+import uuid as uuid_lib
 
 router = APIRouter()
 
@@ -65,6 +67,18 @@ def create_property(
     )
     db.add(prop)
     db.commit()
+
+    # Notificación al usuario
+    notif = NotifModel(
+        id=str(uuid_lib.uuid4()),
+        user_id=current_user.id,
+        title="Propiedad publicada ✓",
+        body=f'Tu propiedad "{data.title}" ha sido publicada exitosamente.',
+        type="property",
+    )
+    db.add(notif)
+    db.commit()
+
     db.refresh(prop)
     return prop
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/network/upload_service.dart';
+import '../../../../core/constants/locations_data.dart';
 import '../viewmodels/property_viewmodel.dart';
 import '../../domain/entities/property_entity.dart';
 
@@ -28,6 +29,10 @@ class _CreatePropertyViewState extends State<CreatePropertyView> {
   bool _hasGarage = false;
   bool _hasGarden = false;
   bool _isLoading = false;
+
+  String? _selectedEstado;
+  String? _selectedMunicipio;
+  String? _selectedZona;
 
   final List<File> _selectedImages = [];
   final List<String> _uploadedUrls = [];
@@ -324,18 +329,55 @@ class _CreatePropertyViewState extends State<CreatePropertyView> {
             // Ubicación
             _SectionLabel(theme: theme, label: 'Ubicación'),
             const SizedBox(height: 8),
-            TextFormField(
-              controller: _cityCtrl,
-              decoration: const InputDecoration(labelText: 'Ciudad'),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
+
+            // Estado
+            _LocationDropdown(
+              theme: theme,
+              label: 'Estado',
+              value: _selectedEstado,
+              items: LocationsData.getEstados(),
+              onChanged: (val) => setState(() {
+                _selectedEstado = val;
+                _selectedMunicipio = null;
+                _selectedZona = null;
+                _cityCtrl.text = '';
+                _zoneCtrl.text = '';
+              }),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _zoneCtrl,
-              decoration: const InputDecoration(labelText: 'Zona / Colonia'),
-              validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null,
-            ),
-            const SizedBox(height: 24),
+
+            // Municipio
+            if (_selectedEstado != null) ...[
+              _LocationDropdown(
+                theme: theme,
+                label: 'Municipio / Ciudad',
+                value: _selectedMunicipio,
+                items: LocationsData.getMunicipios(_selectedEstado!),
+                onChanged: (val) => setState(() {
+                  _selectedMunicipio = val;
+                  _selectedZona = null;
+                  _cityCtrl.text = val ?? '';
+                  _zoneCtrl.text = '';
+                }),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Zona
+            if (_selectedMunicipio != null) ...[
+              _LocationDropdown(
+                theme: theme,
+                label: 'Zona / Colonia',
+                value: _selectedZona,
+                items: LocationsData.getZonas(_selectedMunicipio!),
+                onChanged: (val) => setState(() {
+                  _selectedZona = val;
+                  _zoneCtrl.text = val ?? '';
+                }),
+              ),
+              const SizedBox(height: 12),
+            ],
+            const SizedBox(height: 12),
 
             // Características
             _SectionLabel(theme: theme, label: 'Características'),
@@ -525,6 +567,39 @@ class _StepField extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LocationDropdown extends StatelessWidget {
+  final ThemeData theme;
+  final String label;
+  final String? value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+
+  const _LocationDropdown({
+    required this.theme,
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(labelText: label),
+      isExpanded: true,
+      items: items
+          .map((item) => DropdownMenuItem(
+        value: item,
+        child: Text(item, overflow: TextOverflow.ellipsis),
+      ))
+          .toList(),
+      onChanged: onChanged,
+      validator: (v) => v == null ? 'Selecciona $label' : null,
     );
   }
 }

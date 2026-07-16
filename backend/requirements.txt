@@ -14,3 +14,5 @@ python-dotenv==1.0.1
 email-validator==2.2.0
 python-multipart==0.0.12
 pillow==10.4.0
+firebase-admin==6.5.0
+stripe==10.12.0

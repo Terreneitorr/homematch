@@ -16,9 +16,13 @@ import '../../../../features/profile/presentation/views/edit_profile_view.dart';
 import '../../../../features/history/presentation/views/history_view.dart';
 import '../../../properties/presentation/views/create_property_view.dart';
 import '../../../../features/profile/presentation/views/agency_profile_view.dart';
+import '../../../../features/schedules/presentation/views/schedule_config_view.dart';
 import '../../../../features/info/presentation/views/help_center_view.dart';
 import '../../../../features/info/presentation/views/terms_view.dart';
 import '../../../../features/info/presentation/views/privacy_view.dart';
+import '../../../../features/notifications/presentation/views/notifications_view.dart';
+import '../../../../features/chat/presentation/views/conversations_view.dart';
+import '../../../../features/payments/presentation/views/payment_view.dart';
 import '../../../../core/network/dio_client.dart';
 
 class MainNavigationView extends StatefulWidget {
@@ -65,9 +69,9 @@ class MainNavigationViewState extends State<MainNavigationView> {
   List<Widget> _getPages(String role) {
     switch (role) {
       case 'SELLER':
-        return const [PropertiesView(), _SellerDashboard(), _ProfileView()];
+        return const [PropertiesView(), SearchView(), _SellerDashboard(), _ProfileView()];
       case 'AGENCY':
-        return const [PropertiesView(), _AgencyDashboard(), AgencyProfileView()];
+        return const [PropertiesView(), SearchView(), _AgencyDashboard(), AgencyProfileView()];
       case 'ADMIN':
         return const [PropertiesView(), _AdminPanel(), _ProfileView()];
       default:
@@ -80,12 +84,14 @@ class MainNavigationViewState extends State<MainNavigationView> {
       case 'SELLER':
         return const [
           NavigationDestination(icon: Icon(Icons.home_work_outlined), selectedIcon: Icon(Icons.home_work), label: 'Propiedades'),
+          NavigationDestination(icon: Icon(Icons.search_outlined), selectedIcon: Icon(Icons.search), label: 'Buscar'),
           NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Perfil'),
         ];
       case 'AGENCY':
         return const [
           NavigationDestination(icon: Icon(Icons.home_work_outlined), selectedIcon: Icon(Icons.home_work), label: 'Propiedades'),
+          NavigationDestination(icon: Icon(Icons.search_outlined), selectedIcon: Icon(Icons.search), label: 'Buscar'),
           NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'Dashboard'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Perfil'),
         ];
@@ -163,6 +169,7 @@ class _SellerDashboardState extends State<_SellerDashboard> {
     try {
       final propRes = await DioClient().dio.get('/properties/');
       final aptRes = await DioClient().dio.get('/appointments/');
+      final convRes = await DioClient().dio.get('/chat/conversations');
       final userId = context.read<AuthViewModel>().user?.id ?? '';
       final props = (propRes.data as List)
           .where((p) => p['owner_id'] == userId)
@@ -173,7 +180,7 @@ class _SellerDashboardState extends State<_SellerDashboard> {
           'properties': props.length,
           'active': active,
           'appointments': (aptRes.data as List).length,
-          'messages': 0,
+          'messages': (convRes.data as List).length,
         };
         _loading = false;
       });
@@ -266,11 +273,27 @@ class _SellerDashboardState extends State<_SellerDashboard> {
               ),
               _ActionTile(
                 theme: theme,
+                icon: Icons.chat_bubble_outline,
+                title: 'Mis mensajes',
+                subtitle: 'Chatea con interesados',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ConversationsView())),
+              ),
+              _ActionTile(
+                theme: theme,
                 icon: Icons.analytics_outlined,
                 title: 'Estadísticas del mercado',
                 subtitle: 'Métricas y tendencias',
                 onTap: () => Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const AnalyticsView())),
+              ),
+              _ActionTile(
+                theme: theme,
+                icon: Icons.schedule_outlined,
+                title: 'Configurar horario de atención',
+                subtitle: 'Define días y horas disponibles para visitas',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ScheduleConfigView())),
               ),
             ],
           ),
@@ -293,6 +316,7 @@ class _AgencyDashboardState extends State<_AgencyDashboard> {
     'properties': 0,
     'active': 0,
     'appointments': 0,
+    'messages': 0,
     'total_views': 0,
   };
   List<dynamic> _recentProperties = [];
@@ -308,6 +332,7 @@ class _AgencyDashboardState extends State<_AgencyDashboard> {
     try {
       final propRes = await DioClient().dio.get('/properties/');
       final aptRes = await DioClient().dio.get('/appointments/');
+      final convRes = await DioClient().dio.get('/chat/conversations');
       final analyticsRes = await DioClient().dio.get('/analytics/');
       final userId = context.read<AuthViewModel>().user?.id ?? '';
 
@@ -321,6 +346,7 @@ class _AgencyDashboardState extends State<_AgencyDashboard> {
           'properties': props.length,
           'active': active,
           'appointments': (aptRes.data as List).length,
+          'messages': (convRes.data as List).length,
           'total_views': analyticsRes.data['total_properties'] ?? 0,
         };
         _recentProperties = props.take(3).toList();
@@ -375,9 +401,9 @@ class _AgencyDashboardState extends State<_AgencyDashboard> {
                   ),
                   _StatCard(
                     theme: theme,
-                    icon: Icons.check_circle,
-                    value: '${_stats['active']}',
-                    label: 'Activas',
+                    icon: Icons.chat_bubble_outline,
+                    value: '${_stats['messages']}',
+                    label: 'Mensajes',
                     color: theme.colorScheme.secondary,
                   ),
                   _StatCard(
@@ -440,6 +466,22 @@ class _AgencyDashboardState extends State<_AgencyDashboard> {
                 subtitle: 'Gestiona visitas agendadas',
                 onTap: () => Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const AppointmentsView())),
+              ),
+              _ActionTile(
+                theme: theme,
+                icon: Icons.chat_bubble_outline,
+                title: 'Mis mensajes',
+                subtitle: 'Chatea con interesados',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ConversationsView())),
+              ),
+              _ActionTile(
+                theme: theme,
+                icon: Icons.schedule_outlined,
+                title: 'Configurar horario',
+                subtitle: 'Define disponibilidad para visitas',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ScheduleConfigView())),
               ),
               _ActionTile(
                 theme: theme,
@@ -1005,6 +1047,21 @@ class _ProfileView extends StatelessWidget {
                   ),
                   _ProfileTile(
                     theme: theme,
+                    icon: Icons.chat_bubble_outline,
+                    title: 'Mensajes',
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(
+                            builder: (_) => const ConversationsView())),
+                  ),
+                  _ProfileTile(
+                    theme: theme,
+                    icon: Icons.workspace_premium_outlined,
+                    title: 'Obtener Premium',
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const PaymentView())),
+                  ),
+                  _ProfileTile(
+                    theme: theme,
                     icon: Icons.history,
                     title: 'Historial de búsquedas',
                     onTap: () => Navigator.push(context,
@@ -1014,8 +1071,19 @@ class _ProfileView extends StatelessWidget {
                     theme: theme,
                     icon: Icons.calendar_today_outlined,
                     title: 'Mis citas',
-                    onTap: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const AppointmentsView())),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const AppointmentsView())),
+                  ),
+                  _ProfileTile(
+                    theme: theme,
+                    icon: Icons.notifications_outlined,
+                    title: 'Notificaciones',
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const NotificationsView())),
                   ),
                   const SizedBox(height: 16),
                   _SectionHeader(theme: theme, title: 'Soporte'),

@@ -9,6 +9,8 @@ import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../auth/presentation/views/main_navigation_view.dart';
 import '../../../favorites/presentation/viewmodels/favorites_viewmodel.dart';
 import '../../../recommendations/presentation/views/recommendations_view.dart';
+import '../../../../core/network/dio_client.dart';
+import '../../../notifications/presentation/views/notifications_view.dart';
 
 class PropertiesView extends StatefulWidget {
   const PropertiesView({super.key});
@@ -88,6 +90,8 @@ class _PropertiesViewState extends State<PropertiesView> {
           ),
         ),
         actions: [
+          // Campana con badge
+          const _NotificationBell(),
           if (role == 'SELLER' || role == 'AGENCY' || role == 'ADMIN')
             IconButton(
               icon: Icon(Icons.add_circle_outline,
@@ -337,5 +341,80 @@ class _PropertiesViewState extends State<PropertiesView> {
           },
         );
     }
+  }
+}
+
+class _NotificationBell extends StatefulWidget {
+  const _NotificationBell();
+
+  @override
+  State<_NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<_NotificationBell> {
+  int _count = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCount();
+  }
+
+  Future<void> _loadCount() async {
+    try {
+      final res =
+      await DioClient().dio.get('/notifications/unread-count');
+      setState(() => _count = res.data['count'] ?? 0);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Stack(
+      children: [
+        IconButton(
+          icon: Icon(
+            _count > 0
+                ? Icons.notifications_rounded
+                : Icons.notifications_outlined,
+            color: theme.colorScheme.onSurface,
+          ),
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const NotificationsView()),
+            );
+            _loadCount();
+          },
+        ),
+        if (_count > 0)
+          Positioned(
+            right: 8,
+            top: 8,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.error,
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: theme.colorScheme.surface, width: 1.5),
+              ),
+              child: Center(
+                child: Text(
+                  _count > 9 ? '9+' : '$_count',
+                  style: TextStyle(
+                    color: theme.colorScheme.onError,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }

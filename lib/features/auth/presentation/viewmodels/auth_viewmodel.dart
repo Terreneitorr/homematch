@@ -78,17 +78,19 @@ class AuthViewModel extends ChangeNotifier {
   Future<void> acceptTerms() async {
     _errorMessage = null;
     try {
-      await _dataSource.acceptTerms();
-      // Refresca el usuario completo con el nuevo token
-      final updated = await _dataSource.getCurrentUser();
-      if (updated != null) {
-        _user = updated;
-        notifyListeners();
+      final updatedUser = await _dataSource.acceptTerms();
+      if (updatedUser != null) {
+        _user = updatedUser;
+      } else {
+        // Fallback: si no viene el usuario en la respuesta, intentar cargarlo
+        final refreshed = await _dataSource.getCurrentUser();
+        if (refreshed != null) _user = refreshed;
       }
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'No se pudieron aceptar los términos. Reintenta.';
       notifyListeners();
-      rethrow; // Lanzamos para que la vista pueda quitar el loading
+      rethrow;
     }
   }
 

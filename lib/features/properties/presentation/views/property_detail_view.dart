@@ -4,6 +4,7 @@ import 'package:homematch_ai/core/network/dio_client.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../domain/entities/property_entity.dart';
+import '../../../chat/presentation/views/chat_view.dart';
 
 class PropertyDetailView extends StatefulWidget {
   final PropertyEntity property;
@@ -42,6 +43,36 @@ class _PropertyDetailViewState extends State<PropertyDetailView> {
         sellerId: widget.property.ownerId,
       ),
     );
+  }
+
+  Future<void> _startChat(BuildContext context) async {
+    try {
+      final res = await DioClient().dio.post(
+        '/chat/conversations/${widget.property.ownerId}',
+        queryParameters: {'property_id': widget.property.id},
+      );
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatView(
+              conversationId: res.data['id'],
+              otherUserLabel: 'Vendedor',
+              propertyTitle: widget.property.title,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error al iniciar conversación'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -372,7 +403,7 @@ class _PropertyDetailViewState extends State<PropertyDetailView> {
             const SizedBox(width: 12),
             Expanded(
               child: FilledButton(
-                onPressed: () {},
+                onPressed: () => _startChat(context),
                 style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                 child: const Text('Contactar'),
               ),
@@ -503,203 +534,338 @@ class _ScheduleSheet extends StatefulWidget {
   final ThemeData theme;
   final String propertyId;
   final String sellerId;
-  const _ScheduleSheet(
-      {required this.theme, required this.propertyId, required this.sellerId});
+  const _ScheduleSheet({
+    required this.theme,
+    required this.propertyId,
+    required this.sellerId,
+  });
 
   @override
   State<_ScheduleSheet> createState() => _ScheduleSheetState();
 }
 
 class _ScheduleSheetState extends State<_ScheduleSheet> {
-DateTime? _selectedDate;
-TimeOfDay? _selectedTime;
-String _type = 'presencial';
-bool _loading = false;
+  DateTime? _selectedDate;
+  String? _selectedSlot;
+  String? _selectedSlotDatetime;
+  String _type = 'presencial';
+  bool _loading = false;
+  List<dynamic> _slots = [];
+  bool _loadingSlots = false;
+  String? _slotsMessage;
 
-@override
-Widget build(BuildContext context) {
-final theme = widget.theme;
+  final List<DateTime> _availableDates = List.generate(
+    14,
+    (i) => DateTime.now().add(Duration(days: i + 1)),
+  );
 
-return Padding(
-padding: EdgeInsets.only(
-bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-left: 24,
-right: 24,
-top: 16,
-),
-child: Column(
-mainAxisSize: MainAxisSize.min,
-crossAxisAlignment: CrossAxisAlignment.start,
-children: [
-Center(
-child: Container(
-width: 40,
-height: 4,
-decoration: BoxDecoration(
-color: theme.colorScheme.outlineVariant,
-borderRadius: BorderRadius.circular(2),
-),
-),
-),
-const SizedBox(height: 20),
-Text('Agendar visita', style: theme.textTheme.titleLarge),
-const SizedBox(height: 20),
-// Tipo
-Text('Tipo de visita',
-style: theme.textTheme.labelLarge?.copyWith(
-color: theme.colorScheme.onSurfaceVariant,
-)),
-const SizedBox(height: 8),
-Row(
-children: ['presencial', 'virtual', 'telefonica'].map((t) {
-final sel = _type == t;
-final label = t == 'presencial'
-? 'Presencial'
-: t == 'virtual'
-? 'Virtual'
-: 'Telefónica';
-return Expanded(
-child: Padding(
-padding: EdgeInsets.only(right: t != 'telefonica' ? 8 : 0),
-child: GestureDetector(
-onTap: () => setState(() => _type = t),
-child: Container(
-padding: const EdgeInsets.symmetric(vertical: 10),
-decoration: BoxDecoration(
-color: sel
-? theme.colorScheme.primaryContainer
-: theme.colorScheme.surfaceContainerLowest,
-borderRadius: BorderRadius.circular(8),
-border: Border.all(
-color: sel
-? theme.colorScheme.primary
-: theme.colorScheme.outlineVariant,
-),
-),
-child: Text(label,
-textAlign: TextAlign.center,
-style: theme.textTheme.labelSmall?.copyWith(
-color: sel
-? theme.colorScheme.onPrimaryContainer
-: theme.colorScheme.onSurfaceVariant,
-fontWeight:
-sel ? FontWeight.w600 : FontWeight.normal,
-)),
-),
-),
-),
-);
-}).toList(),
-),
-const SizedBox(height: 16),
-// Fecha
-Text('Fecha y hora',
-style: theme.textTheme.labelLarge?.copyWith(
-color: theme.colorScheme.onSurfaceVariant,
-)),
-const SizedBox(height: 8),
-Row(
-children: [
-Expanded(
-child: OutlinedButton.icon(
-onPressed: () async {
-final date = await showDatePicker(
-context: context,
-initialDate: DateTime.now().add(const Duration(days: 1)),
-firstDate: DateTime.now(),
-lastDate: DateTime.now().add(const Duration(days: 90)),
-);
-if (date != null) setState(() => _selectedDate = date);
-},
-icon: Icon(Icons.calendar_today,
-size: 16, color: theme.colorScheme.primary),
-label: Text(
-_selectedDate == null
-? 'Seleccionar fecha'
-: '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
-style: theme.textTheme.labelMedium,
-),
-style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-),
-),
-const SizedBox(width: 8),
-Expanded(
-child: OutlinedButton.icon(
-onPressed: () async {
-final time = await showTimePicker(
-context: context,
-initialTime: TimeOfDay.now(),
-);
-if (time != null) setState(() => _selectedTime = time);
-},
-              icon: Icon(Icons.access_time,
-                  size: 16, color: theme.colorScheme.primary),
-              label: Text(
-                _selectedTime == null
-                    ? 'Seleccionar hora'
-                    : _selectedTime!.format(context),
-                style: theme.textTheme.labelMedium,
-              ),
-              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-            ),
-          ),
-        ],
+  Future<void> _loadSlots(DateTime date) async {
+    setState(() { _loadingSlots = true; _slots = []; _selectedSlot = null; });
+    try {
+      final dateStr =
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final res = await DioClient().dio.get(
+        '/schedules/${widget.sellerId}/slots',
+        queryParameters: {'date_str': dateStr},
+      );
+      setState(() {
+        _slots = res.data['slots'] ?? [];
+        _slotsMessage = res.data['message'];
+        _loadingSlots = false;
+      });
+    } catch (_) {
+      setState(() { _loadingSlots = false; _slotsMessage = 'Error al cargar horarios'; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        left: 20, right: 20, top: 16,
       ),
-      const SizedBox(height: 24),
-      SizedBox(
-        width: double.infinity,
-        child: FilledButton(
-          onPressed: (_selectedDate == null || _selectedTime == null || _loading)
-              ? null
-              : () async {
-                  setState(() => _loading = true);
-                  try {
-                    final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate!);
-                    final timeStr = _selectedTime!.format(context);
-                    final scheduledAt = '${dateStr}T${timeStr.padLeft(5, '0')}:00';
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text('Agendar visita', style: theme.textTheme.titleLarge),
+            const SizedBox(height: 20),
 
-                    await DioClient().dio.post('/appointments/', data: {
-                      'property_id': widget.propertyId,
-                      'seller_id': widget.sellerId,
-                      'appointment_type': _type,
-                      'scheduled_at': scheduledAt,
-                      'notes': '',
-                    });
+            // Tipo
+            Text('Tipo de visita',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                )),
+            const SizedBox(height: 8),
+            Row(
+              children: ['presencial', 'virtual', 'telefonica'].map((t) {
+                final sel = _type == t;
+                final label = t == 'presencial'
+                    ? 'Presencial'
+                    : t == 'virtual'
+                        ? 'Virtual'
+                        : 'Telefónica';
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                        right: t != 'telefonica' ? 6 : 0),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _type = t),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: sel
+                              ? theme.colorScheme.primaryContainer
+                              : theme.colorScheme.surfaceContainerLowest,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: sel
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outlineVariant,
+                          ),
+                        ),
+                        child: Text(label,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: sel
+                                ? theme.colorScheme.onPrimaryContainer
+                                : theme.colorScheme.onSurfaceVariant,
+                            fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
+                          )),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
 
-                    if (mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Cita agendada con éxito'),
-                          backgroundColor: Colors.green,
+            // Selector de fecha
+            Text('Selecciona una fecha',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                )),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 72,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _availableDates.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final date = _availableDates[i];
+                  final selected = _selectedDate?.day == date.day &&
+                      _selectedDate?.month == date.month;
+                  final days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() => _selectedDate = date);
+                      _loadSlots(date);
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 52,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.surfaceContainerLowest,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: selected
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outlineVariant,
                         ),
-                      );
-                    }
-                  } catch (e) {
-                    setState(() => _loading = false);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error al agendar: ${e.toString()}'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            days[date.weekday - 1],
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: selected
+                                  ? theme.colorScheme.onPrimary.withValues(alpha: 0.8)
+                                  : theme.colorScheme.outline,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${date.day}',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: selected
+                                  ? theme.colorScheme.onPrimary
+                                  : theme.colorScheme.onSurface,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            _monthShort(date.month),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: selected
+                                  ? theme.colorScheme.onPrimary.withValues(alpha: 0.8)
+                                  : theme.colorScheme.outline,
+                              fontSize: 9,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
                 },
-          child: _loading
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white),
+              ),
+            ),
+
+            // Slots de hora
+            if (_selectedDate != null) ...[
+              const SizedBox(height: 20),
+              Text('Horarios disponibles',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  )),
+              const SizedBox(height: 8),
+              if (_loadingSlots)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: CircularProgressIndicator(
+                        color: theme.colorScheme.primary, strokeWidth: 2),
+                  ),
                 )
-              : const Text('Confirmar Cita'),
+              else if (_slots.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.event_busy,
+                          color: theme.colorScheme.outline, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _slotsMessage ??
+                              'No hay horarios disponibles para este día',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _slots.map((slot) {
+                    final sel = _selectedSlot == slot['time'];
+                    return GestureDetector(
+                      onTap: () => setState(() {
+                        _selectedSlot = slot['time'];
+                        _selectedSlotDatetime = slot['datetime'];
+                      }),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: sel
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.surfaceContainerLowest,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: sel
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outlineVariant,
+                          ),
+                        ),
+                        child: Text(
+                          slot['time'],
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: sel
+                                ? theme.colorScheme.onPrimary
+                                : theme.colorScheme.onSurface,
+                            fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+            ],
+
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: (_selectedDate == null ||
+                      _selectedSlot == null ||
+                      _loading)
+                  ? null
+                  : () => _submit(context),
+              child: _loading
+                  ? SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: theme.colorScheme.onPrimary,
+                      ),
+                    )
+                  : const Text('Confirmar cita'),
+            ),
+          ],
         ),
       ),
-      const SizedBox(height: 16),
-    ],
-  ),
-);
+    );
+  }
+
+  String _monthShort(int month) {
+    const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return months[month - 1];
+  }
+
+  Future<void> _submit(BuildContext context) async {
+    setState(() => _loading = true);
+    try {
+      await DioClient().dio.post('/appointments/', data: {
+        'property_id': widget.propertyId,
+        'seller_id': widget.sellerId,
+        'appointment_type': _type,
+        'scheduled_at': _selectedSlotDatetime,
+      });
+      if (context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('¡Cita agendada exitosamente!'),
+            backgroundColor: Theme.of(context).colorScheme.secondary,
+          ),
+        );
+      }
+    } catch (_) {
+      setState(() => _loading = false);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error al agendar la cita'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 }

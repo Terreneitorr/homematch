@@ -21,6 +21,8 @@ services:
       SECRET_KEY: supersecretkey123homematch
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      STRIPE_SECRET_KEY: sk_test_TU_CLAVE_AQUI
+      STRIPE_WEBHOOK_SECRET: whsec_TU_WEBHOOK_SECRET
     depends_on:
       - postgres
     volumes:
@@ -38,6 +40,22 @@ services:
       - postgres
     volumes:
       - ./ml-service:/app
+
+  gateway:
+    build: ./gateway
+    container_name: homematch_gateway
+    ports:
+      - "9000:9000"
+    environment:
+      SECRET_KEY: supersecretkey123homematch
+      BACKEND_URL: http://backend:8000
+      ML_URL: http://ml-service:8001
+      FERNET_KEY: ${FERNET_KEY:-}
+    depends_on:
+      - backend
+      - ml-service
+    volumes:
+      - ./gateway:/app
 
 volumes:
   postgres_data:

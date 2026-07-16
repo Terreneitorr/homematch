@@ -119,9 +119,24 @@ def accept_terms(
 ):
     current_user.accepted_terms = True
     db.commit()
+    db.refresh(current_user)
+    
     token = create_access_token({
         "sub": current_user.id,
         "role": current_user.role.value,
         "accepted_terms": True,
     })
-    return {"message": "Términos aceptados", "access_token": token}
+    
+    return {
+        "message": "Términos aceptados",
+        "access_token": token,
+        "user": {
+            "id": current_user.id,
+            "name": current_user.name,
+            "email": current_user.email,
+            "role": current_user.role.value,
+            "avatar": current_user.avatar,
+            "is_active": current_user.is_active,
+            "accepted_terms": True
+        }
+    }

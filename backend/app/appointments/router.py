@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import uuid
+from app.notifications.router import Notification as NotifModel
+import uuid as uuid_lib
 
 class AppointmentCreate(BaseModel):
     property_id: str
@@ -57,6 +59,27 @@ def create_appointment(
         notes=data.notes,
     )
     db.add(appointment)
+
+    # Notificación al comprador
+    buyer_notif = NotifModel(
+        id=str(uuid_lib.uuid4()),
+        user_id=current_user.id,
+        title="Cita agendada ✓",
+        body=f"Tu visita {data.appointment_type} ha sido agendada exitosamente.",
+        type="appointment",
+    )
+    db.add(buyer_notif)
+
+    # Notificación al vendedor
+    seller_notif = NotifModel(
+        id=str(uuid_lib.uuid4()),
+        user_id=data.seller_id,
+        title="Nueva solicitud de visita",
+        body=f"Tienes una nueva solicitud de visita {data.appointment_type} para tu propiedad.",
+        type="appointment",
+    )
+    db.add(seller_notif)
+
     db.commit()
     db.refresh(appointment)
     return appointment

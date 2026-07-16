@@ -9,7 +9,7 @@ abstract class AuthRemoteDataSource {
   Future<UserModel?> getCurrentUser();
   Future<String?> getStoredToken();
   Future<void> clearToken();
-  Future<void> acceptTerms();
+  Future<UserModel?> acceptTerms();
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -68,17 +68,22 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         acceptedTerms: data['accepted_terms'] ?? false,
       );
     } on DioException catch (e) {
-      throw Exception('Error: ${e.response?.data ?? e.message}');
+      final detail = e.response?.data?['detail'] ?? e.message ?? 'Error de conexión con el servidor';
+      throw Exception('Backend Error: $detail');
     }
   }
 
   @override
-  Future<void> acceptTerms() async {
+  Future<UserModel?> acceptTerms() async {
     final response = await _client.dio.post('/auth/accept-terms');
     final data = response.data;
     if (data['access_token'] != null) {
       await _client.saveToken(data['access_token']);
     }
+    if (data['user'] != null) {
+      return UserModel.fromJson(data['user']);
+    }
+    return null;
   }
 
   @override

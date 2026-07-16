@@ -106,3 +106,39 @@ class Appointment(Base):
     scheduled_at = Column(DateTime, nullable=False)
     notes = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SellerSchedule(Base):
+    __tablename__ = "seller_schedules"
+    id = Column(String, primary_key=True)
+    seller_id = Column(String, ForeignKey("users.id"), unique=True)
+    monday = Column(Boolean, default=True)
+    tuesday = Column(Boolean, default=True)
+    wednesday = Column(Boolean, default=True)
+    thursday = Column(Boolean, default=True)
+    friday = Column(Boolean, default=True)
+    saturday = Column(Boolean, default=False)
+    sunday = Column(Boolean, default=False)
+    start_hour = Column(Integer, default=9)
+    end_hour = Column(Integer, default=18)
+    slot_duration = Column(Integer, default=60)
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    seller_id = Column(String, ForeignKey("users.id"), nullable=False)
+    property_id = Column(String, ForeignKey("properties.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_message_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Message(Base):
+    __tablename__ = "messages"
+    id = Column(String, primary_key=True)
+    conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False)
+    sender_id = Column(String, ForeignKey("users.id"), nullable=False)
+    content = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
