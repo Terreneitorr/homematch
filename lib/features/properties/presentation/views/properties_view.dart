@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../viewmodels/property_viewmodel.dart';
-import '../widgets/property_card_grid.dart';
-import 'create_property_view.dart';
-import '../../domain/entities/property_entity.dart';
-import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
-import '../../../auth/presentation/views/main_navigation_view.dart';
-import '../../../favorites/presentation/viewmodels/favorites_viewmodel.dart';
-import '../../../recommendations/presentation/views/recommendations_view.dart';
-import '../../../../core/network/dio_client.dart';
-import '../../../notifications/presentation/views/notifications_view.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:homematch_ai/core/network/upload_service.dart';
+import 'package:homematch_ai/features/properties/presentation/viewmodels/property_viewmodel.dart';
+import 'package:homematch_ai/features/properties/presentation/widgets/property_card_grid.dart';
+import 'package:homematch_ai/features/properties/presentation/views/create_property_view.dart';
+import 'package:homematch_ai/features/properties/domain/entities/property_entity.dart';
+import 'package:homematch_ai/features/auth/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:homematch_ai/features/auth/presentation/views/main_navigation_view.dart';
+import 'package:homematch_ai/features/favorites/presentation/viewmodels/favorites_viewmodel.dart';
+import 'package:homematch_ai/features/recommendations/presentation/views/recommendations_view.dart';
+import 'package:homematch_ai/core/network/dio_client.dart';
+import 'package:homematch_ai/features/notifications/presentation/views/notifications_view.dart';
 
 class PropertiesView extends StatefulWidget {
   const PropertiesView({super.key});
@@ -26,7 +28,17 @@ class _PropertiesViewState extends State<PropertiesView> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => context.read<PropertyViewModel>().loadProperties());
+    Future.microtask(() async {
+      final propVM = context.read<PropertyViewModel>();
+      final authVM = context.read<AuthViewModel>();
+      final favVM = context.read<FavoritesViewModel>();
+
+      await propVM.loadProperties();
+      
+      if (authVM.user != null && authVM.user!.id.isNotEmpty) {
+        await favVM.loadFavorites(authVM.user!.id, propVM.properties);
+      }
+    });
   }
 
   List<PropertyEntity> _getFilteredProperties(PropertyViewModel vm) {
@@ -115,7 +127,7 @@ class _PropertiesViewState extends State<PropertiesView> {
               backgroundColor: theme.colorScheme.primary,
               backgroundImage: (authVM.user?.avatar != null &&
                   authVM.user!.avatar!.isNotEmpty)
-                  ? NetworkImage(authVM.user!.avatar!) as ImageProvider
+                  ? CachedNetworkImageProvider(UploadService.getFullUrl(authVM.user!.avatar))
                   : null,
               child: (authVM.user?.avatar == null ||
                   authVM.user!.avatar!.isEmpty)

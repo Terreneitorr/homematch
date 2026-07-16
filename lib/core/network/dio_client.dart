@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../constants/api_constants.dart';
+import 'package:homematch_ai/core/constants/api_constants.dart';
 
 class DioClient {
   static final DioClient _instance = DioClient._internal();
@@ -13,19 +13,19 @@ class DioClient {
   DioClient._internal() {
     dio = Dio(BaseOptions(
       baseUrl: ApiConstants.baseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 45), // Aumentado para tareas pesadas
       headers: {'Content-Type': 'application/json'},
     ));
 
     mlDio = Dio(BaseOptions(
       baseUrl: ApiConstants.mlUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 45), // Aumentado para ML
       headers: {'Content-Type': 'application/json'},
     ));
 
-    dio.interceptors.add(InterceptorsWrapper(
+    final interceptor = InterceptorsWrapper(
       onRequest: (options, handler) async {
         final token = await _storage.read(key: 'access_token');
         if (token != null) {
@@ -36,7 +36,10 @@ class DioClient {
       onError: (error, handler) {
         return handler.next(error);
       },
-    ));
+    );
+
+    dio.interceptors.add(interceptor);
+    mlDio.interceptors.add(interceptor);
   }
 
   Future<void> saveToken(String token) async {

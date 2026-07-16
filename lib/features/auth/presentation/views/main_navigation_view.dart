@@ -3,27 +3,28 @@ import 'package:flutter/material.dart';
 import 'package:homematch_ai/features/analytics/presentation/views/analytics_view.dart' hide AnalyticsView;
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../viewmodels/auth_viewmodel.dart';
-import '../../../properties/presentation/views/properties_view.dart';
-import '../../../favorites/presentation/views/favorites_view.dart';
-import '../../../search/presentation/views/search_view.dart';
-import '../../../properties/presentation/viewmodels/property_viewmodel.dart';
-import '../../../favorites/presentation/viewmodels/favorites_viewmodel.dart';
-import '../../../appointments/presentation/views/appointments_view.dart';
-import '../../../appointments/presentation/views/appointments_view.dart';
-import '../../../analytics/presentation/views/analytics_view.dart';
-import '../../../../features/profile/presentation/views/edit_profile_view.dart';
-import '../../../../features/history/presentation/views/history_view.dart';
-import '../../../properties/presentation/views/create_property_view.dart';
-import '../../../../features/profile/presentation/views/agency_profile_view.dart';
-import '../../../../features/schedules/presentation/views/schedule_config_view.dart';
-import '../../../../features/info/presentation/views/help_center_view.dart';
-import '../../../../features/info/presentation/views/terms_view.dart';
-import '../../../../features/info/presentation/views/privacy_view.dart';
-import '../../../../features/notifications/presentation/views/notifications_view.dart';
-import '../../../../features/chat/presentation/views/conversations_view.dart';
-import '../../../../features/payments/presentation/views/payment_view.dart';
-import '../../../../core/network/dio_client.dart';
+import 'package:homematch_ai/features/auth/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:homematch_ai/features/properties/presentation/views/properties_view.dart';
+import 'package:homematch_ai/features/favorites/presentation/views/favorites_view.dart';
+import 'package:homematch_ai/features/search/presentation/views/search_view.dart';
+import 'package:homematch_ai/features/properties/presentation/viewmodels/property_viewmodel.dart';
+import 'package:homematch_ai/features/favorites/presentation/viewmodels/favorites_viewmodel.dart';
+import 'package:homematch_ai/features/appointments/presentation/views/appointments_view.dart';
+import 'package:homematch_ai/features/analytics/presentation/views/analytics_view.dart';
+import 'package:homematch_ai/features/profile/presentation/views/edit_profile_view.dart';
+import 'package:homematch_ai/features/history/presentation/views/history_view.dart';
+import 'package:homematch_ai/features/properties/presentation/views/create_property_view.dart';
+import 'package:homematch_ai/features/profile/presentation/views/agency_profile_view.dart';
+import 'package:homematch_ai/features/schedules/presentation/views/schedule_config_view.dart';
+import 'package:homematch_ai/features/info/presentation/views/help_center_view.dart';
+import 'package:homematch_ai/features/info/presentation/views/terms_view.dart';
+import 'package:homematch_ai/features/info/presentation/views/privacy_view.dart';
+import 'package:homematch_ai/features/notifications/presentation/views/notifications_view.dart';
+import 'package:homematch_ai/features/chat/presentation/views/conversations_view.dart';
+import 'package:homematch_ai/features/payments/presentation/views/payment_view.dart';
+import 'package:homematch_ai/core/network/dio_client.dart';
+import 'package:homematch_ai/core/network/upload_service.dart' as upload;
+import 'package:homematch_ai/core/security/fcm_security_service.dart';
 
 class MainNavigationView extends StatefulWidget {
   const MainNavigationView({super.key});
@@ -42,6 +43,12 @@ class MainNavigationViewState extends State<MainNavigationView> {
   @override
   void initState() {
     super.initState();
+
+    // Inicializar FCM con el context
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FcmSecurityService.initialize(context);
+    });
+
     Future.microtask(() async {
       if (!mounted) return;
 
@@ -53,16 +60,9 @@ class MainNavigationViewState extends State<MainNavigationView> {
         return;
       }
 
-      final propVM = context.read<PropertyViewModel>();
-      final favVM = context.read<FavoritesViewModel>();
-
-      await propVM.loadProperties();
-      if (propVM.properties.isNotEmpty) {
-        await favVM.loadFavorites(
-          authVM.user?.id ?? '',
-          propVM.properties,
-        );
-      }
+      // ELIMINADO: propVM.loadProperties() y favVM.loadFavorites()
+      // Razón: PropertiesView ya se encarga de cargar sus propios datos al iniciar,
+      // llamar esto aquí duplica la carga y ralentiza el inicio.
     });
   }
 
@@ -281,19 +281,19 @@ class _SellerDashboardState extends State<_SellerDashboard> {
               ),
               _ActionTile(
                 theme: theme,
+                icon: Icons.schedule_outlined,
+                title: 'Configurar horario',
+                subtitle: 'Define disponibilidad para visitas',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ScheduleConfigView())),
+              ),
+              _ActionTile(
+                theme: theme,
                 icon: Icons.analytics_outlined,
                 title: 'Estadísticas del mercado',
                 subtitle: 'Métricas y tendencias',
                 onTap: () => Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const AnalyticsView())),
-              ),
-              _ActionTile(
-                theme: theme,
-                icon: Icons.schedule_outlined,
-                title: 'Configurar horario de atención',
-                subtitle: 'Define días y horas disponibles para visitas',
-                onTap: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const ScheduleConfigView())),
               ),
             ],
           ),
@@ -424,7 +424,7 @@ class _AgencyDashboardState extends State<_AgencyDashboard> {
               ),
               const SizedBox(height: 24),
 
-              // Propiedades recientes
+              // Mis propiedades recientes
               if (_recentProperties.isNotEmpty) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -980,7 +980,7 @@ class _ProfileView extends StatelessWidget {
                     radius: 40,
                     backgroundColor: theme.colorScheme.primaryContainer,
                     backgroundImage: (user?.avatar != null && user!.avatar!.isNotEmpty)
-                        ? NetworkImage(user.avatar!)
+                        ? CachedNetworkImageProvider(upload.UploadService.getFullUrl(user.avatar))
                         : null,
                     child: (user?.avatar == null || user!.avatar!.isEmpty)
                         ? Text(

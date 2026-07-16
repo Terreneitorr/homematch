@@ -1,9 +1,9 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.auth.dependencies import get_current_user
-from app.models import User
+from app.infrastructure.database.database import get_db
+from app.infrastructure.security.dependencies import get_current_user
+from app.infrastructure.database.models import User
 import os
 import uuid
 import shutil
@@ -35,6 +35,7 @@ async def upload_file(
     with open(filepath, "wb") as f:
         f.write(content)
 
+    # Devolvemos solo la ruta relativa para evitar problemas si cambia la IP del servidor
     return {"url": f"/uploads/{filename}", "filename": filename}
 
 @router.get("/{filename}")

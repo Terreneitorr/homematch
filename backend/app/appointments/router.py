@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import User, Appointment, AppointmentStatus
-from app.auth.dependencies import get_current_user
+from app.infrastructure.database.database import get_db
+from app.infrastructure.database.models import User, Appointment
+from app.infrastructure.security.dependencies import get_current_user
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import uuid
-from app.notifications.router import Notification as NotifModel
-import uuid as uuid_lib
+from app.fcm.router import notify_appointment
 
 class AppointmentCreate(BaseModel):
     property_id: str
@@ -59,29 +58,18 @@ def create_appointment(
         notes=data.notes,
     )
     db.add(appointment)
-
-    # Notificación al comprador
-    buyer_notif = NotifModel(
-        id=str(uuid_lib.uuid4()),
-        user_id=current_user.id,
-        title="Cita agendada ✓",
-        body=f"Tu visita {data.appointment_type} ha sido agendada exitosamente.",
-        type="appointment",
-    )
-    db.add(buyer_notif)
-
-    # Notificación al vendedor
-    seller_notif = NotifModel(
-        id=str(uuid_lib.uuid4()),
-        user_id=data.seller_id,
-        title="Nueva solicitud de visita",
-        body=f"Tienes una nueva solicitud de visita {data.appointment_type} para tu propiedad.",
-        type="appointment",
-    )
-    db.add(seller_notif)
-
     db.commit()
     db.refresh(appointment)
+
+    # Push notifications reales
+    notify_appointment(
+        db=db,
+        user_id=current_user.id,
+        seller_id=data.seller_id,
+        appointment_type=data.appointment_type,
+        scheduled_at=str(data.scheduled_at),
+    )
+
     return appointment
 
 @router.delete("/{appointment_id}")
@@ -95,38 +83,11 @@ def cancel_appointment(
     ).first()
     if not apt:
         raise HTTPException(status_code=404, detail="No encontrada")
-    apt.status = AppointmentStatus.cancelada
-    db.commit()
-    return {"message": "Cita cancelada"}
-
-@router.put("/{appointment_id}/status")
-def update_status(
-    appointment_id: str,
-    status: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    apt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
-    if not apt:
-        raise HTTPException(status_code=404, detail="Cita no encontrada")
-
-    # Seguridad: solo dueño o cliente
-    if current_user.id != apt.seller_id and current_user.id != apt.user_id:
+    
+    # role es String
+    if current_user.id != apt.user_id and current_user.id != apt.seller_id and current_user.role != "ADMIN":
         raise HTTPException(status_code=403, detail="Sin permiso")
 
-    # Mapeo manual para evitar errores de Enum
-    status_map = {
-        "confirmada": AppointmentStatus.confirmada,
-        "rechazada": AppointmentStatus.rechazada,
-        "cancelada": AppointmentStatus.cancelada,
-        "reagendada": AppointmentStatus.reagendada,
-        "pendiente": AppointmentStatus.pendiente,
-    }
-
-    new_status = status_map.get(status.lower())
-    if not new_status:
-        raise HTTPException(status_code=400, detail=f"Estado '{status}' no es válido")
-
-    apt.status = new_status
+    apt.status = "cancelada"
     db.commit()
-    return {"message": "Estado actualizado", "new_status": apt.status}
+    return {"message": "Cita cancelada"}

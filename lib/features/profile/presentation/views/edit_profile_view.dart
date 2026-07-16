@@ -2,9 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../../core/network/dio_client.dart';
-import '../../../../core/network/upload_service.dart';
-import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:homematch_ai/core/network/dio_client.dart';
+import 'package:homematch_ai/core/network/upload_service.dart';
+import 'package:homematch_ai/features/auth/presentation/viewmodels/auth_viewmodel.dart';
 
 class EditProfileView extends StatefulWidget {
   const EditProfileView({super.key});
@@ -121,7 +122,7 @@ class _EditProfileViewState extends State<EditProfileView> {
                     backgroundImage: _avatarFile != null
                         ? FileImage(_avatarFile!) as ImageProvider
                         : (user?.avatar != null && user!.avatar!.isNotEmpty)
-                        ? NetworkImage(user.avatar!)
+                        ? CachedNetworkImageProvider(UploadService.getFullUrl(user.avatar))
                         : null,
                     child: (_avatarFile == null && (user?.avatar == null || user!.avatar!.isEmpty))
                         ? Text(

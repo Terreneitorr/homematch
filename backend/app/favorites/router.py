@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from app.database import get_db
-from app.models import Favorite, User
-from app.auth.dependencies import get_current_user
+from app.infrastructure.database.database import get_db
+from app.infrastructure.database.models import Favorite, User
+from app.infrastructure.security.dependencies import get_current_user
 from app.favorites.schemas import FavoriteResponse
 import uuid
 

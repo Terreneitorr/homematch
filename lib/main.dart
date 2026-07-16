@@ -7,6 +7,8 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme/app_theme.dart';
 import 'core/security/fcm_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'core/security/fcm_security_service.dart';
 import 'core/security/inactivity_manager.dart';
 import 'core/security/inactivity_detector.dart';
 import 'core/security/session_guard.dart';
@@ -59,6 +61,10 @@ void main() async {
       statusBarIconBrightness: Brightness.dark,
     ),
   );
+  
+  // Registrar handler de background ANTES de runApp
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
   runApp(const HomeMatchApp());
 }
 
@@ -109,8 +115,15 @@ class HomeMatchApp extends StatelessWidget {
             deletePropertyUseCase: DeletePropertyUseCase(propertyRepository),
           ),
         ),
-        ChangeNotifierProvider(
+        ChangeNotifierProxyProvider<AuthViewModel, FavoritesViewModel>(
           create: (_) => FavoritesViewModel(favoritesRepository),
+          update: (_, authVM, favoritesVM) {
+            // Si el usuario se desloguea, limpiamos los favoritos
+            if (authVM.status == AuthStatus.unauthenticated) {
+              favoritesVM?.clear();
+            }
+            return favoritesVM!;
+          },
         ),
         ChangeNotifierProvider(create: (_) => SearchViewModel()),
       ],

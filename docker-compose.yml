@@ -23,6 +23,8 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
       STRIPE_SECRET_KEY: sk_test_TU_CLAVE_AQUI
       STRIPE_WEBHOOK_SECRET: whsec_TU_WEBHOOK_SECRET
+      FERNET_KEY: "y_pqrQtELEsiwaXPsf8pu6u_7lRzyAuU8WsRSD-le4I="
+      FIREBASE_CREDENTIALS_PATH: /app/firebase-credentials.json
     depends_on:
       - postgres
     volumes:
@@ -50,7 +52,7 @@ services:
       SECRET_KEY: supersecretkey123homematch
       BACKEND_URL: http://backend:8000
       ML_URL: http://ml-service:8001
-      FERNET_KEY: ${FERNET_KEY:-}
+      FERNET_KEY: "y_pqrQtELEsiwaXPsf8pu6u_7lRzyAuU8WsRSD-le4I="
     depends_on:
       - backend
       - ml-service

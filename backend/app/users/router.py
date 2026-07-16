@@ -1,15 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import User, UserRole
-from app.auth.dependencies import get_current_user
+from app.infrastructure.database.database import get_db
+from app.infrastructure.database.models import User, UserRole
+from app.infrastructure.security.dependencies import get_current_user
 from pydantic import BaseModel
 from typing import Optional, List
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     avatar: Optional[str] = None
-    phone: Optional[str] = None
 
 class UserResponse(BaseModel):
     id: str

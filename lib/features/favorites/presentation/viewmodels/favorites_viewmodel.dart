@@ -10,13 +10,26 @@ class FavoritesViewModel extends ChangeNotifier {
   Set<String> _favoriteIds = {};
   List<PropertyEntity> _favoriteProperties = [];
   bool _loading = false;
+  String? _lastLoadedUserId;
 
   Set<String> get favoriteIds => _favoriteIds;
   List<PropertyEntity> get favoriteProperties => _favoriteProperties;
   bool get loading => _loading;
 
   Future<void> loadFavorites(String userId, List<PropertyEntity> allProperties) async {
+    // Si el usuario cambió, limpiar inmediatamente para no mostrar datos del anterior
+    if (_lastLoadedUserId != userId) {
+      _favoriteIds = {};
+      _favoriteProperties = [];
+      notifyListeners();
+    } else if (_favoriteIds.isNotEmpty && _favoriteProperties.isNotEmpty) {
+      // Si es el mismo usuario y ya hay datos, solo sincronizar
+      syncWithProperties(allProperties);
+      return;
+    }
+
     _loading = true;
+    _lastLoadedUserId = userId;
     notifyListeners();
     try {
       final ids = await repository.getFavoriteIds(userId);
@@ -48,6 +61,13 @@ class FavoritesViewModel extends ChangeNotifier {
     _favoriteProperties = allProperties
         .where((p) => _favoriteIds.contains(p.id))
         .toList();
+    notifyListeners();
+  }
+
+  void clear() {
+    _favoriteIds = {};
+    _favoriteProperties = [];
+    _lastLoadedUserId = null;
     notifyListeners();
   }
 }

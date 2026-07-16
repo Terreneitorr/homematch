@@ -1,9 +1,11 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../../../core/network/dio_client.dart';
-import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
-import 'chat_view.dart';
+import 'package:homematch_ai/core/network/dio_client.dart';
+import 'package:homematch_ai/core/network/upload_service.dart' as upload;
+import 'package:homematch_ai/features/auth/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:homematch_ai/features/chat/presentation/views/chat_view.dart';
 
 class ConversationsView extends StatefulWidget {
   const ConversationsView({super.key});
@@ -123,7 +125,7 @@ class _ConversationsViewState extends State<ConversationsView> {
                           border: Border.all(color: theme.colorScheme.surface, width: 2),
                           shape: BoxShape.circle,
                           image: DecorationImage(
-                            image: NetworkImage(propPhoto),
+                            image: CachedNetworkImageProvider(upload.UploadService.getFullUrl(propPhoto)),
                             fit: BoxFit.cover,
                           ),
                         ),

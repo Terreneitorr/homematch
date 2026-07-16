@@ -1,24 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, String, Boolean, DateTime, Text
-from app.database import Base, get_db
-from app.models import User
-from app.auth.dependencies import get_current_user
+from app.infrastructure.database.database import get_db
+from app.infrastructure.database.models import User, Notification
+from app.infrastructure.security.dependencies import get_current_user
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import uuid
-
-class Notification(Base):
-    __tablename__ = "notifications"
-    id = Column(String, primary_key=True)
-    user_id = Column(String, nullable=False)
-    title = Column(String, nullable=False)
-    body = Column(Text, nullable=False)
-    type = Column(String, default="general")
-    is_read = Column(Boolean, default=False)
-    data = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
 
 class NotificationResponse(BaseModel):
     id: str

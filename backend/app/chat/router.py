@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import User, Conversation, Message, Property
-from app.auth.dependencies import get_current_user
+from app.infrastructure.database.database import get_db
+from app.infrastructure.database.models import User, Conversation, Message, Property
+from app.infrastructure.security.dependencies import get_current_user
+from app.fcm.router import notify_message
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -192,4 +193,19 @@ def send_message(
     conv.last_message_at = datetime.utcnow()
     db.commit()
     db.refresh(msg)
+
+    # Notificar al receptor
+    receiver_id = (
+        conv.seller_id
+        if current_user.id == conv.user_id
+        else conv.user_id
+    )
+    notify_message(
+        db=db,
+        receiver_id=receiver_id,
+        sender_name=current_user.name,
+        message_content=data.content,
+        conversation_id=conversation_id,
+    )
+
     return msg

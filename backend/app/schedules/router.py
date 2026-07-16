@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import User, SellerSchedule
-from app.auth.dependencies import get_current_user
+from app.infrastructure.database.database import get_db
+from app.infrastructure.database.models import User, SellerSchedule
+from app.infrastructure.security.dependencies import get_current_user
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, date, timedelta

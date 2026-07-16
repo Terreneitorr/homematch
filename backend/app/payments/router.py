@@ -2,9 +2,9 @@ import stripe
 import os
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import User
-from app.auth.dependencies import get_current_user
+from app.infrastructure.database.database import get_db
+from app.infrastructure.database.models import User
+from app.infrastructure.security.dependencies import get_current_user
 from pydantic import BaseModel
 from typing import Optional
 import uuid
@@ -105,7 +105,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         if user_id and plan:
             user = db.query(User).filter(User.id == user_id).first()
             if user:
-                from app.models import UserRole
+                from app.infrastructure.database.models import UserRole
                 if plan == "agency":
                     user.role = UserRole.AGENCY
                 db.commit()

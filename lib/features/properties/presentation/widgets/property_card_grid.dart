@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:homematch_ai/core/network/upload_service.dart';
 import 'package:homematch_ai/features/properties/domain/entities/property_entity.dart';
 import 'package:homematch_ai/features/properties/presentation/views/property_detail_view.dart';
 
@@ -84,7 +85,7 @@ class PropertyCardGrid extends StatelessWidget {
                   ),
                   child: property.photos.isNotEmpty
                       ? CachedNetworkImage(
-                    imageUrl: property.photos.first,
+                    imageUrl: UploadService.getFullUrl(property.photos.first),
                     height: 120,
                     width: double.infinity,
                     fit: BoxFit.cover,

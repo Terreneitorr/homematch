@@ -39,7 +39,7 @@ class AuthViewModel extends ChangeNotifier {
         return;
       }
       final user = await _dataSource.getCurrentUser()
-          .timeout(const Duration(seconds: 6));
+          .timeout(const Duration(seconds: 15));
       if (user != null && user.id.isNotEmpty) {
         _user = user;
         _status = AuthStatus.authenticated;

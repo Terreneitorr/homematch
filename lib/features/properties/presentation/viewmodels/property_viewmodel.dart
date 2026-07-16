@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../domain/entities/property_entity.dart';
-import '../../domain/usecases/get_properties_usecase.dart';
-import '../../domain/usecases/create_property_usecase.dart';
-import '../../domain/usecases/delete_property_usecase.dart';
-import '../../data/datasources/ml_datasource.dart';
+import 'package:homematch_ai/features/properties/domain/entities/property_entity.dart';
+import 'package:homematch_ai/features/properties/domain/usecases/get_properties_usecase.dart';
+import 'package:homematch_ai/features/properties/domain/usecases/create_property_usecase.dart';
+import 'package:homematch_ai/features/properties/domain/usecases/delete_property_usecase.dart';
+import 'package:homematch_ai/features/properties/data/datasources/ml_datasource.dart';
 
 enum PropertyStatus2 { initial, loading, loaded, error }
 
@@ -39,7 +39,7 @@ class PropertyViewModel extends ChangeNotifier {
     try {
       _properties = await getPropertiesUseCase();
       _status = PropertyStatus2.loaded;
-      // Clasificar todas las propiedades en background
+      // Clasificar todas las propiedades en background con control de flujo
       _classifyAllProperties();
     } catch (e) {
       _errorMessage = e.toString();
@@ -49,8 +49,13 @@ class PropertyViewModel extends ChangeNotifier {
   }
 
   Future<void> _classifyAllProperties() async {
-    for (final property in _properties) {
-      if (!_mlResults.containsKey(property.id)) {
+    final pendingProperties = _properties.where((p) => !_mlResults.containsKey(p.id)).toList();
+    
+    if (pendingProperties.isEmpty) return;
+
+    // PROCESAMIENTO SECUENCIAL (Para evitar saturar el servidor)
+    for (final property in pendingProperties) {
+      try {
         final result = await _mlDataSource.classifyProperty(
           precio: property.price,
           habitaciones: property.bedrooms,
@@ -59,9 +64,13 @@ class PropertyViewModel extends ChangeNotifier {
           tipo: _getTipo(property),
         );
         _mlResults[property.id] = result;
+        notifyListeners(); // Actualizar UI por cada propiedad clasificada
+      } catch (_) {
+        // Ignorar errores individuales
       }
+      // Pequeño respiro para el servidor
+      await Future.delayed(const Duration(milliseconds: 100));
     }
-    notifyListeners();
   }
 
   String _getTipo(PropertyEntity property) {
@@ -82,7 +91,7 @@ class PropertyViewModel extends ChangeNotifier {
       final newProperty = await createPropertyUseCase(property);
       _properties.insert(0, newProperty);
 
-      // Clasificar la nueva propiedad
+      // Clasificar la nueva propiedad inmediatamente
       final result = await _mlDataSource.classifyProperty(
         precio: newProperty.price,
         habitaciones: newProperty.bedrooms,

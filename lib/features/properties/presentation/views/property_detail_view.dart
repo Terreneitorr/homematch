@@ -1,10 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:homematch_ai/core/network/dio_client.dart';
+import 'package:homematch_ai/core/network/upload_service.dart' as upload;
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../domain/entities/property_entity.dart';
-import '../../../chat/presentation/views/chat_view.dart';
+import 'package:homematch_ai/features/properties/domain/entities/property_entity.dart';
+import 'package:homematch_ai/features/chat/presentation/views/chat_view.dart';
 
 class PropertyDetailView extends StatefulWidget {
   final PropertyEntity property;
@@ -120,7 +121,7 @@ class _PropertyDetailViewState extends State<PropertyDetailView> {
                           setState(() => _currentPage = index),
                       itemBuilder: (context, index) {
                         return CachedNetworkImage(
-                          imageUrl: widget.property.photos[index],
+                          imageUrl: upload.UploadService.getFullUrl(widget.property.photos[index]),
                           fit: BoxFit.cover,
                           placeholder: (_, __) => Container(
                             color: theme.colorScheme.surfaceContainerHigh,

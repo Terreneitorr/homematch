@@ -37,6 +37,8 @@ PUBLIC_ROUTES = [
     ("/properties/", "GET"),
     ("/properties", "GET"),
     ("/uploads/", "GET"),
+    ("/ml/train-model", "POST"),      # Permitir entrenamiento sin token (mantenimiento)
+    ("/ml/classify-property", "POST"), # Permitir clasificación sin token para rapidez
 ]
 
 # Rutas que van al ML
@@ -114,7 +116,10 @@ class Proxy:
             headers: dict,
             user_payload: dict | None = None,
     ) -> Response:
-        body = await request.body()
+        try:
+            body = await request.body()
+        except:
+            body = b""
 
         # Agregar headers de contexto del usuario
         forward_headers = {
@@ -127,7 +132,7 @@ class Proxy:
             forward_headers["X-User-Role"] = user_payload.get("role", "")
             forward_headers["X-Gateway"] = "homematch-gateway"
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.request(
                 method=request.method,
                 url=target_url,
@@ -136,8 +141,10 @@ class Proxy:
                 params=dict(request.query_params),
             )
 
-        # Si es una imagen u otro archivo binario, devolverlo directamente
+        # Manejar la respuesta
         content_type = response.headers.get("content-type", "")
+        
+        # Si es binario (imágenes), devolver Response crudo
         if "image/" in content_type or "application/octet-stream" in content_type:
             return Response(
                 content=response.content,
@@ -145,10 +152,19 @@ class Proxy:
                 media_type=content_type
             )
 
-        return JSONResponse(
-            content=response.json() if response.content else {},
-            status_code=response.status_code,
-        )
+        # Si es JSON, intentar parsear. Si falla, devolver texto crudo.
+        try:
+            return JSONResponse(
+                content=response.json(),
+                status_code=response.status_code,
+            )
+        except Exception as e:
+            logger.error(f"[GATEWAY] Error parseando JSON: {e}")
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                media_type=content_type or "text/plain"
+            )
 
 
 # ─── HEALTH CHECK ────────────────────────────────────────────────
