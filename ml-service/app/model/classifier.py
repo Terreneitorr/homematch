@@ -46,14 +46,30 @@ def load_user_model() -> Tuple:
 
 
 def train_property_model(data: List[dict]) -> Tuple:
-    """
-    Entrena K-Means sobre PROPIEDADES para clasificarlas en segmentos.
-    Usado para el chip de IA en cada propiedad.
-    """
     df = pd.DataFrame(data)
-    df["tipo_encoded"] = df.get("tipo", pd.Series(["Casa"] * len(df))).apply(encode_tipo)
+
+    # Asegurar que existan las columnas necesarias
+    if "tipo" not in df.columns:
+        df["tipo"] = "Casa"
+    if "precio" not in df.columns:
+        return None, None
+
+    df["tipo_encoded"] = df["tipo"].apply(encode_tipo)
+
+    # Verificar columnas requeridas
+    required = ["precio", "habitaciones", "banos", "metros"]
+    for col in required:
+        if col not in df.columns:
+            df[col] = 0
+
+    df = df.dropna(subset=required)
+    df = df[df["precio"] > 0]
+
+    if len(df) < 2:
+        return None, None
 
     features = df[["precio", "habitaciones", "banos", "metros", "tipo_encoded"]].values
+
     scaler = StandardScaler()
     features_scaled = scaler.fit_transform(features)
 

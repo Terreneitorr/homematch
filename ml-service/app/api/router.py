@@ -73,10 +73,13 @@ def classify(data: PropertyInput, db: Session = Depends(get_db)):
 
 @router.post("/train-model")
 def train(request: TrainRequest, db: Session = Depends(get_db)):
+    data = []
+    source = "base_data"
+
     if request.data and len(request.data) > 0:
         data = request.data
+        source = "request"
     else:
-        # Intentar desde BD
         try:
             inferences = db.query(Inference).all()
             if inferences:
@@ -91,12 +94,11 @@ def train(request: TrainRequest, db: Session = Depends(get_db)):
                     for inf in inferences
                     if inf.precio and inf.metros
                 ]
-            else:
-                data = []
+                if data:
+                    source = "database"
         except Exception:
-            data = []
+            pass
 
-    # Si no hay datos usar datos base para demo
     if not data:
         data = [
             {"precio": 450000, "habitaciones": 1, "banos": 1, "metros": 45, "tipo": "Departamento"},
@@ -118,9 +120,9 @@ def train(request: TrainRequest, db: Session = Depends(get_db)):
             "message": "Modelo entrenado exitosamente",
             "n_clusters": model.n_clusters,
             "samples_used": len(data),
-            "source": "database" if inferences else "base_data",
+            "source": source,
         }
-    return {"message": "Error entrenando modelo"}
+    return {"message": "Error entrenando modelo", "samples": len(data)}
 
 
 @router.post("/collaborative-recommend")
