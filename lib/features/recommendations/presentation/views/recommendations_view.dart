@@ -27,23 +27,37 @@ class _RecommendationsViewState extends State<RecommendationsView> {
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() { _loading = true; _error = null; });
     try {
+      // 1. Favoritos del usuario actual
       final favRes = await DioClient().dio.get('/favorites/');
-      final favIds = (favRes.data as List)
+      final myFavIds = (favRes.data as List)
           .map((f) => f['property_id'] as String)
           .toList();
 
+      // 2. Todas las propiedades
       final propRes = await DioClient().dio.get('/properties/');
       final allProps = (propRes.data as List)
           .map((p) => PropertyModel.fromJson(p))
           .toList();
 
-      if (favIds.isEmpty) {
-        // Sin favoritos — mostrar todas mezcladas
+      // 3. Construir lista de mis favoritos con datos completos
+      final myFavProps = allProps
+          .where((p) => myFavIds.contains(p.id))
+          .map((p) => {
+        'id': p.id,
+        'price': p.price,
+        'bedrooms': p.bedrooms,
+        'bathrooms': p.bathrooms,
+        'area': p.area,
+        'tipo': p.title.toLowerCase().contains('depto') ||
+            p.title.toLowerCase().contains('departamento')
+            ? 'Departamento'
+            : 'Casa',
+      })
+          .toList();
+
+      if (myFavProps.isEmpty) {
         allProps.shuffle();
         setState(() {
           _recommendations = allProps.take(6).toList();
@@ -52,21 +66,47 @@ class _RecommendationsViewState extends State<RecommendationsView> {
         return;
       }
 
-      // Obtener recomendaciones del Servicio ML (basadas en clusters)
-      final mlRecs = await _mlDataSource.getRecommendations(favoriteIds: favIds);
-      
-      if (mlRecs.isEmpty) {
-        // Fallback a lógica local si el ML no devuelve nada
-        _recommendations = _localFallback(allProps, favIds);
-      } else {
-        final recIds = mlRecs.map((r) => r['property_id'] as String).toList();
-        _recommendations = allProps.where((p) => recIds.contains(p.id)).toList();
-        
-        // Mantener orden del ML
-        _recommendations.sort((a, b) => recIds.indexOf(a.id).compareTo(recIds.indexOf(b.id)));
-      }
+      // 4. Todos los favoritos de todos los usuarios (simplificado)
+      // En producción vendría de un endpoint del backend
+      final allUsersFavorites = [myFavProps]; // base mínima
 
-      setState(() => _loading = false);
+      // 5. Llamar al ML colaborativo
+      final allPropsData = allProps.map((p) => {
+        'id': p.id,
+        'price': p.price,
+        'bedrooms': p.bedrooms,
+        'bathrooms': p.bathrooms,
+        'area': p.area,
+        'tipo': p.title.toLowerCase().contains('depto') ? 'Departamento' : 'Casa',
+        'title': p.title,
+        'city': p.city,
+        'zone': p.zone,
+      }).toList();
+
+      final mlRes = await DioClient().mlDio.post(
+        '/collaborative-recommend',
+        data: {
+          'user_favorites': myFavProps,
+          'all_properties': allPropsData,
+          'all_users_favorites': allUsersFavorites,
+          'limit': 6,
+        },
+      );
+
+      final recIds = (mlRes.data['recommendations'] as List)
+          .map((r) => r['id'] as String)
+          .toList();
+
+      final recProps = allProps
+          .where((p) => recIds.contains(p.id))
+          .toList();
+
+      setState(() {
+        _recommendations = recProps.isEmpty
+            ? allProps.where((p) => !myFavIds.contains(p.id)).take(6).toList()
+            : recProps;
+        _loading = false;
+      });
     } catch (e) {
       setState(() {
         _error = 'No se pudieron cargar recomendaciones';

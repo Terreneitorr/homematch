@@ -1,5 +1,5 @@
 class ApiConstants {
-  static const String gatewayUrl = 'http://192.168.1.67:9000';
-  static const String baseUrl = 'http://192.168.1.67:9000';      // ahora todo pasa por gateway
-  static const String mlUrl = 'http://192.168.1.67:9000/ml';    // ML también por gateway
+  static const String gatewayUrl = 'https://homematch-production.up.railway.app';
+  static const String baseUrl = 'https://homematch-production.up.railway.app';
+  static const String mlUrl = 'https://brilliant-creation-production-09a7.up.railway.app';
 }

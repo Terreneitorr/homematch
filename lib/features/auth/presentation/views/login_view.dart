@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../../core/security/screen_security.dart';
 import '../viewmodels/auth_viewmodel.dart';
 
 class LoginView extends StatefulWidget {
@@ -11,6 +12,20 @@ class LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<LoginView> {
+  @override
+  void initState() {
+    super.initState();
+    // Solo en login activamos protección
+    ScreenSecurity.enableSecure();
+  }
+
+  @override
+  void dispose() {
+    // Al salir del login desactivamos
+    ScreenSecurity.disableSecure();
+    super.dispose();
+  }
+
   String _selectedRole = 'USER';
 
   final Map<String, Map<String, dynamic>> _roles = {
