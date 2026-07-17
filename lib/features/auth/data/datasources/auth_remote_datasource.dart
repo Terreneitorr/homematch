@@ -41,10 +41,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     try {
       account = await _googleSignIn.signIn();
     } catch (e) {
-      throw Exception('Error de Google Sign In: $e');
+      throw Exception('Error Google Sign In: $e');
     }
 
-    if (account == null) throw Exception('Login cancelado por el usuario');
+    if (account == null) throw Exception('Login cancelado');
 
     try {
       final response = await _client.dio.post('/auth/google', data: {
@@ -55,21 +55,24 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         'role': role,
       });
 
+      print('RESPONSE DATA: ${response.data}');  // <- agrega esto
+      print('RESPONSE TYPE: ${response.data.runtimeType}');
+
       final data = response.data;
       await _client.saveToken(data['access_token']);
 
       return UserModel(
-        id: data['user_id'],
-        name: data['name'],
-        email: data['email'],
-        role: data['role'],
-        avatar: data['avatar'],
+        id: data['user_id']?.toString() ?? '',
+        name: data['name']?.toString() ?? '',
+        email: data['email']?.toString() ?? '',
+        role: data['role']?.toString() ?? 'USER',
         isActive: true,
-        acceptedTerms: data['accepted_terms'] ?? false,
+        acceptedTerms: data['accepted_terms'] == true,
       );
-    } on DioException catch (e) {
-      final detail = e.response?.data?['detail'] ?? e.message ?? 'Error de conexión con el servidor';
-      throw Exception('Backend Error: $detail');
+    } catch (e, stack) {
+      print('ERROR LOGIN: $e');
+      print('STACK: $stack');
+      rethrow;
     }
   }
 

@@ -37,25 +37,26 @@ class PropertyModel extends PropertyEntity {
     }
 
     return PropertyModel(
-      id: json['id'],
-      ownerId: json['owner_id'] ?? '',
-      title: json['title'],
-      description: json['description'],
-      price: (json['price'] as num).toDouble(),
+      id: json['id']?.toString() ?? '',
+      ownerId: json['owner_id']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0,
       operationType: json['operation_type'] == 'sale'
           ? OperationType.sale
           : OperationType.rent,
-      status: _parseStatus(json['status'] ?? 'available'),
-      city: json['city'],
-      zone: json['zone'],
-      colony: json['colony'],
-      bedrooms: json['bedrooms'] ?? 1,
-      bathrooms: json['bathrooms'] ?? 1,
-      hasGarage: json['has_garage'] ?? false,
-      hasGarden: json['has_garden'] ?? false,
-      area: (json['area'] as num).toDouble(),
+      status: _parseStatus(json['status']?.toString() ?? 'available'),
+      city: json['city']?.toString() ?? '',
+      zone: json['zone']?.toString() ?? '',
+      colony: json['colony']?.toString(),
+      bedrooms: (json['bedrooms'] as num?)?.toInt() ?? 1,
+      bathrooms: (json['bathrooms'] as num?)?.toInt() ?? 1,
+      hasGarage: json['has_garage'] == true,
+      hasGarden: json['has_garden'] == true,
+      area: (json['area'] as num?)?.toDouble() ?? 0,
       photos: parsePhotos(json['photos']),
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: DateTime.parse(
+          json['created_at']?.toString() ?? DateTime.now().toIso8601String()),
     );
   }
 

@@ -9,6 +9,19 @@ import uuid
 
 router = APIRouter()
 
+
+def get_role_value(role) -> str:
+    """Obtiene el valor del rol ya sea Enum o string"""
+    if hasattr(role, 'value'):
+        return role.value
+    return str(role)
+
+
+def get_accepted_terms(user) -> bool:
+    """Obtiene accepted_terms de forma segura"""
+    return getattr(user, 'accepted_terms', False) or False
+
+
 @router.post("/register", response_model=TokenResponse)
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == data.email).first()
@@ -24,33 +37,50 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    token = create_access_token({"sub": user.id, "role": user.role.value})
+    role_value = get_role_value(user.role)
+    token = create_access_token({"sub": user.id, "role": role_value})
     return TokenResponse(
-        access_token=token, role=user.role.value,
-        user_id=user.id, name=user.name, email=user.email,
+        access_token=token,
+        role=role_value,
+        user_id=user.id,
+        name=user.name,
+        email=user.email,
     )
+
 
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
     if not user or not verify_password(data.password, user.password_hash or ""):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
-    token = create_access_token({"sub": user.id, "role": user.role.value})
+    role_value = get_role_value(user.role)
+    accepted = get_accepted_terms(user)
+    token = create_access_token({"sub": user.id, "role": role_value})
     return TokenResponse(
-        access_token=token, role=user.role.value,
-        user_id=user.id, name=user.name, email=user.email,
-        accepted_terms=user.accepted_terms,
+        access_token=token,
+        role=role_value,
+        user_id=user.id,
+        name=user.name,
+        email=user.email,
+        accepted_terms=accepted,
     )
+
 
 @router.post("/google", response_model=TokenResponse)
 def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
     is_new = user is None
     if not user:
-        role_map = {"USER": UserRole.USER, "SELLER": UserRole.SELLER,
-                    "AGENCY": UserRole.AGENCY, "ADMIN": UserRole.ADMIN}
+        role_map = {
+            "USER": UserRole.USER,
+            "SELLER": UserRole.SELLER,
+            "AGENCY": UserRole.AGENCY,
+            "ADMIN": UserRole.ADMIN,
+        }
         user = User(
-            id=data.google_id, name=data.name, email=data.email,
+            id=data.google_id,
+            name=data.name,
+            email=data.email,
             avatar=data.avatar,
             role=role_map.get(data.role.upper(), UserRole.USER),
             accepted_terms=False,
@@ -58,15 +88,25 @@ def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
+
+    role_value = get_role_value(user.role)
+    accepted = get_accepted_terms(user)
+
     token = create_access_token({
-        "sub": user.id, "role": user.role.value,
-        "accepted_terms": user.accepted_terms,
+        "sub": user.id,
+        "role": role_value,
+        "accepted_terms": accepted,
     })
     return TokenResponse(
-        access_token=token, role=user.role.value,
-        user_id=user.id, name=user.name, email=user.email,
-        accepted_terms=user.accepted_terms, is_new_user=is_new,
+        access_token=token,
+        role=role_value,
+        user_id=user.id,
+        name=user.name,
+        email=user.email,
+        accepted_terms=accepted,
+        is_new_user=is_new,
     )
+
 
 @router.post("/accept-terms")
 def accept_terms(
@@ -75,25 +115,32 @@ def accept_terms(
 ):
     current_user.accepted_terms = True
     db.commit()
+    role_value = get_role_value(current_user.role)
     token = create_access_token({
         "sub": current_user.id,
-        "role": current_user.role.value,
+        "role": role_value,
         "accepted_terms": True,
     })
     return {"message": "Términos aceptados", "access_token": token}
+
 
 @router.post("/refresh-token", response_model=TokenResponse)
 def refresh_token(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    role_value = get_role_value(current_user.role)
+    accepted = get_accepted_terms(current_user)
     token = create_access_token({
         "sub": current_user.id,
-        "role": current_user.role.value,
-        "accepted_terms": current_user.accepted_terms,
+        "role": role_value,
+        "accepted_terms": accepted,
     })
     return TokenResponse(
-        access_token=token, role=current_user.role.value,
-        user_id=current_user.id, name=current_user.name,
-        email=current_user.email, accepted_terms=current_user.accepted_terms,
+        access_token=token,
+        role=role_value,
+        user_id=current_user.id,
+        name=current_user.name,
+        email=current_user.email,
+        accepted_terms=accepted,
     )
