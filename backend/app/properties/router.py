@@ -62,6 +62,74 @@ def create_property(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
+    from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import List, Optional
+from app.database import get_db
+from app.models import Property, OperationType, PropertyStatus
+from app.auth.dependencies import get_current_user
+from app.models import User
+from app.properties.schemas import PropertyCreate, PropertyUpdate, PropertyResponse
+from app.properties.semantic_search import semantic_search as run_semantic_search
+import uuid
+
+router = APIRouter()
+
+@router.get("/", response_model=List[PropertyResponse])
+def get_properties(
+        city: Optional[str] = None,
+        operation_type: Optional[str] = None,
+        min_price: Optional[float] = None,
+        max_price: Optional[float] = None,
+        bedrooms: Optional[int] = None,
+        db: Session = Depends(get_db)
+):
+    query = db.query(Property).filter(Property.status == PropertyStatus.available)
+    if city:
+        query = query.filter(Property.city.ilike(f"%{city}%"))
+    if operation_type:
+        query = query.filter(Property.operation_type == operation_type)
+    if min_price:
+        query = query.filter(Property.price >= min_price)
+    if max_price:
+        query = query.filter(Property.price <= max_price)
+    if bedrooms:
+        query = query.filter(Property.bedrooms >= bedrooms)
+    return query.order_by(Property.created_at.desc()).all()
+
+@router.get("/search")
+def search_properties(
+        q: str,
+        limit: int = 10,
+        db: Session = Depends(get_db),
+):
+    """
+    Búsqueda semántica en texto libre.
+    Ej: /properties/search?q=casa con jardín cerca del centro barata
+
+    IMPORTANTE: este endpoint debe ir declarado ANTES de /{property_id}
+    en el archivo. FastAPI matchea rutas en orden de declaración, y
+    /{property_id} es un comodín que intercepta cualquier string
+    (incluyendo "search") si aparece primero.
+    """
+    # Solo propiedades disponibles, igual que en GET /properties/
+    properties = db.query(Property).filter(Property.status == PropertyStatus.available).all()
+    results = run_semantic_search(query=q, properties=properties, top_n=limit)
+    return results
+
+@router.get("/{property_id}", response_model=PropertyResponse)
+def get_property(property_id: str, db: Session = Depends(get_db)):
+    prop = db.query(Property).filter(Property.id == property_id).first()
+    if not prop:
+        raise HTTPException(status_code=404, detail="Propiedad no encontrada")
+    return prop
+
+@router.post("/", response_model=PropertyResponse)
+def create_property(
+        data: PropertyCreate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
     prop = Property(
         id=str(uuid.uuid4()),
         owner_id=current_user.id,
