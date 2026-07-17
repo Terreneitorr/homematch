@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from app.infrastructure.database.database import get_db
-from app.infrastructure.database.models import Property, PropertyStatus
+from app.models import User, Property, Favorite
+from app.database import get_db
+from app.auth.dependencies import get_current_user
 
 router = APIRouter()
+
 
 @router.get("/users-favorites-data")
 def get_users_favorites_data(
@@ -15,8 +17,6 @@ def get_users_favorites_data(
     Devuelve los favoritos de TODOS los usuarios para el filtrado colaborativo.
     El ML necesita esto para encontrar usuarios similares.
     """
-    from app.models import Favorite, Property
-
     users = db.query(User).filter(User.is_active == True).all()
     result = []
 
