@@ -7,7 +7,7 @@ from app.model.classifier import (
     get_collaborative_recommendations, train_user_model,
     build_user_vector, load_user_model, load_model
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
 import os
@@ -29,7 +29,22 @@ class ClassificationResult(BaseModel):
     segmento: str
 
 
+class PropertySample(BaseModel):
+    """Muestra de propiedad usada para (re)entrenar el modelo de K-Means."""
+    precio: float = Field(gt=0, description="Precio de la propiedad, debe ser mayor a 0")
+    habitaciones: int = Field(ge=0, description="Número de habitaciones")
+    banos: int = Field(ge=0, description="Número de baños")
+    metros: float = Field(gt=0, description="Metros cuadrados, debe ser mayor a 0")
+    tipo: str = "Casa"
+
+
+class TrainPropertyRequest(BaseModel):
+    """Body para /train-model. Si no se manda 'data', se usa la BD o datos base."""
+    data: Optional[List[PropertySample]] = None
+
+
 class TrainRequest(BaseModel):
+    """Body genérico usado por /train-user-model (vectores de usuario, no propiedades)."""
     data: Optional[List[dict]] = None
 
 
@@ -72,12 +87,12 @@ def classify(data: PropertyInput, db: Session = Depends(get_db)):
 
 
 @router.post("/train-model")
-def train(request: TrainRequest, db: Session = Depends(get_db)):
+def train(request: TrainPropertyRequest, db: Session = Depends(get_db)):
     data = []
     source = "base_data"
 
     if request.data and len(request.data) > 0:
-        data = request.data
+        data = [sample.model_dump() for sample in request.data]
         source = "request"
     else:
         try:

@@ -6,6 +6,7 @@ from app.models import Property, OperationType, PropertyStatus
 from app.auth.dependencies import get_current_user
 from app.models import User
 from app.properties.schemas import PropertyCreate, PropertyUpdate, PropertyResponse
+from app.properties.semantic_search import semantic_search as run_semantic_search
 import uuid
 
 router = APIRouter()
@@ -38,6 +39,22 @@ def get_property(property_id: str, db: Session = Depends(get_db)):
     if not prop:
         raise HTTPException(status_code=404, detail="Propiedad no encontrada")
     return prop
+
+@router.get("/search")
+def search_properties(
+        q: str,
+        limit: int = 10,
+        db: Session = Depends(get_db),
+):
+    """
+    Búsqueda semántica en texto libre.
+    Ej: /properties/search?q=casa con jardín cerca del centro barata
+    """
+    # TODO: alinea este filtro base con el que ya usas en GET /properties/
+    # (por ejemplo Property.status == PropertyStatus.ACTIVE) si aplica.
+    properties = db.query(Property).all()
+    results = run_semantic_search(query=q, properties=properties, top_n=limit)
+    return results
 
 @router.post("/", response_model=PropertyResponse)
 def create_property(
