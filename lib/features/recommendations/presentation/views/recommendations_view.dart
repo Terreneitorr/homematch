@@ -29,7 +29,7 @@ class _RecommendationsViewState extends State<RecommendationsView> {
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
-      // 1. Favoritos del usuario actual
+      // 1. Mis favoritos
       final favRes = await DioClient().dio.get('/favorites/');
       final myFavIds = (favRes.data as List)
           .map((f) => f['property_id'] as String)
@@ -41,7 +41,13 @@ class _RecommendationsViewState extends State<RecommendationsView> {
           .map((p) => PropertyModel.fromJson(p))
           .toList();
 
-      // 3. Construir lista de mis favoritos con datos completos
+      // 3. Datos de favoritos de TODOS los usuarios
+      final allUsersRes = await DioClient().dio.get(
+          '/analytics/users-favorites-data'
+      );
+      final allUsersData = allUsersRes.data as List;
+
+      // 4. Mis propiedades favoritas con datos completos
       final myFavProps = allProps
           .where((p) => myFavIds.contains(p.id))
           .map((p) => {
@@ -50,45 +56,30 @@ class _RecommendationsViewState extends State<RecommendationsView> {
         'bedrooms': p.bedrooms,
         'bathrooms': p.bathrooms,
         'area': p.area,
-        'tipo': p.title.toLowerCase().contains('depto') ||
-            p.title.toLowerCase().contains('departamento')
-            ? 'Departamento'
-            : 'Casa',
+        'title': p.title,
+        'city': p.city,
       })
           .toList();
 
-      if (myFavProps.isEmpty) {
-        allProps.shuffle();
-        setState(() {
-          _recommendations = allProps.take(6).toList();
-          _loading = false;
-        });
-        return;
-      }
-
-      // 4. Todos los favoritos de todos los usuarios (simplificado)
-      // En producción vendría de un endpoint del backend
-      final allUsersFavorites = [myFavProps]; // base mínima
-
-      // 5. Llamar al ML colaborativo
+      // 5. Todas las propiedades como mapa para el ML
       final allPropsData = allProps.map((p) => {
         'id': p.id,
         'price': p.price,
         'bedrooms': p.bedrooms,
         'bathrooms': p.bathrooms,
         'area': p.area,
-        'tipo': p.title.toLowerCase().contains('depto') ? 'Departamento' : 'Casa',
         'title': p.title,
         'city': p.city,
         'zone': p.zone,
       }).toList();
 
+      // 6. Llamar al ML colaborativo
       final mlRes = await DioClient().mlDio.post(
         '/collaborative-recommend',
         data: {
           'user_favorites': myFavProps,
           'all_properties': allPropsData,
-          'all_users_favorites': allUsersFavorites,
+          'all_users_data': allUsersData,
           'limit': 6,
         },
       );

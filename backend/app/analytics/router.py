@@ -6,18 +6,45 @@ from app.infrastructure.database.models import Property, PropertyStatus
 
 router = APIRouter()
 
-@router.get("/")
-def get_analytics(db: Session = Depends(get_db)):
-    total = db.query(Property).filter(Property.status == PropertyStatus.available).count()
-    avg_price = db.query(func.avg(Property.price)).filter(
-        Property.status == PropertyStatus.available
-    ).scalar()
-    by_city = db.query(Property.city, func.count(Property.id)).group_by(Property.city).all()
-    by_type = db.query(Property.operation_type, func.count(Property.id)).group_by(Property.operation_type).all()
+@router.get("/users-favorites-data")
+def get_users_favorites_data(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    """
+    Devuelve los favoritos de TODOS los usuarios para el filtrado colaborativo.
+    El ML necesita esto para encontrar usuarios similares.
+    """
+    from app.models import Favorite, Property
 
-    return {
-        "total_properties": total,
-        "average_price": round(avg_price or 0, 2),
-        "by_city": [{"city": c, "count": n} for c, n in by_city],
-        "by_operation_type": [{"type": t, "count": n} for t, n in by_type],
-    }
+    users = db.query(User).filter(User.is_active == True).all()
+    result = []
+
+    for user in users:
+        favs = db.query(Favorite).filter(
+            Favorite.user_id == user.id
+        ).all()
+
+        fav_properties = []
+        for fav in favs:
+            prop = db.query(Property).filter(
+                Property.id == fav.property_id
+            ).first()
+            if prop:
+                fav_properties.append({
+                    "id": prop.id,
+                    "price": prop.price,
+                    "bedrooms": prop.bedrooms,
+                    "bathrooms": prop.bathrooms,
+                    "area": prop.area,
+                    "title": prop.title,
+                    "city": prop.city,
+                })
+
+        if fav_properties:
+            result.append({
+                "user_id": user.id,
+                "favorites": fav_properties,
+            })
+
+    return result

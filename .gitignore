@@ -68,3 +68,5 @@ backend/uploads/
 
 # VS Code
 .vscode/
+
+android/key.properties

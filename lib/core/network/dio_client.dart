@@ -18,6 +18,8 @@ class DioClient {
       headers: {'Content-Type': 'application/json'},
     ));
 
+
+
     mlDio = Dio(BaseOptions(
       baseUrl: ApiConstants.mlUrl,
       connectTimeout: const Duration(seconds: 15),
@@ -36,6 +38,7 @@ class DioClient {
       onError: (error, handler) {
         return handler.next(error);
       },
+
     );
 
     dio.interceptors.add(interceptor);

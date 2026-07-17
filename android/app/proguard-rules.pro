@@ -25,3 +25,9 @@
 # Play Core (Solución para errores de R8 con componentes diferidos de Flutter)
 -dontwarn com.google.android.play.core.**
 
+# Stripe Push Provisioning
+-dontwarn com.stripe.android.pushProvisioning.**
+-keep class com.stripe.android.pushProvisioning.** { *; }
+-dontwarn com.reactnativestripesdk.**
+-keep class com.reactnativestripesdk.** { *; }
+
