@@ -73,37 +73,54 @@ def classify(data: PropertyInput, db: Session = Depends(get_db)):
 
 @router.post("/train-model")
 def train(request: TrainRequest, db: Session = Depends(get_db)):
-    """
-    Entrena K-Means sobre propiedades para clasificación.
-    Usa datos reales de la BD o datos proporcionados.
-    """
-    if request.data:
+    if request.data and len(request.data) > 0:
         data = request.data
     else:
-        inferences = db.query(Inference).all()
-        if inferences:
-            data = [
-                {
-                    "precio": inf.precio,
-                    "habitaciones": inf.habitaciones,
-                    "banos": inf.banos,
-                    "metros": inf.metros,
-                    "tipo": inf.tipo,
-                }
-                for inf in inferences
-            ]
-        else:
+        # Intentar desde BD
+        try:
+            inferences = db.query(Inference).all()
+            if inferences:
+                data = [
+                    {
+                        "precio": inf.precio,
+                        "habitaciones": inf.habitaciones,
+                        "banos": inf.banos,
+                        "metros": inf.metros,
+                        "tipo": inf.tipo or "Casa",
+                    }
+                    for inf in inferences
+                    if inf.precio and inf.metros
+                ]
+            else:
+                data = []
+        except Exception:
             data = []
 
-    model, scaler = train_property_model(data) if data else (None, None)
+    # Si no hay datos usar datos base para demo
+    if not data:
+        data = [
+            {"precio": 450000, "habitaciones": 1, "banos": 1, "metros": 45, "tipo": "Departamento"},
+            {"precio": 850000, "habitaciones": 2, "banos": 1, "metros": 75, "tipo": "Departamento"},
+            {"precio": 1200000, "habitaciones": 2, "banos": 2, "metros": 85, "tipo": "Departamento"},
+            {"precio": 1500000, "habitaciones": 3, "banos": 2, "metros": 130, "tipo": "Casa"},
+            {"precio": 1850000, "habitaciones": 3, "banos": 2, "metros": 180, "tipo": "Casa"},
+            {"precio": 2200000, "habitaciones": 4, "banos": 2, "metros": 220, "tipo": "Casa"},
+            {"precio": 3200000, "habitaciones": 4, "banos": 3, "metros": 320, "tipo": "Casa"},
+            {"precio": 4500000, "habitaciones": 5, "banos": 4, "metros": 450, "tipo": "Casa"},
+            {"precio": 980000, "habitaciones": 3, "banos": 2, "metros": 120, "tipo": "Casa"},
+            {"precio": 650000, "habitaciones": 2, "banos": 1, "metros": 60, "tipo": "Departamento"},
+        ]
+
+    model, scaler = train_property_model(data)
 
     if model:
         return {
-            "message": "Modelo de propiedades entrenado",
+            "message": "Modelo entrenado exitosamente",
             "n_clusters": model.n_clusters,
-            "samples": len(data),
+            "samples_used": len(data),
+            "source": "database" if inferences else "base_data",
         }
-    return {"message": "Sin datos suficientes para entrenar"}
+    return {"message": "Error entrenando modelo"}
 
 
 @router.post("/collaborative-recommend")
