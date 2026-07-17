@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.infrastructure.database.database import get_db
-from app.infrastructure.database.models import User, UserRole
-from app.infrastructure.security.dependencies import get_current_user
+from app.database import get_db
+from app.models import User, UserRole
+from app.auth.dependencies import get_current_user
 from pydantic import BaseModel
 from typing import Optional, List
+from datetime import datetime
+import uuid
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
@@ -17,22 +19,21 @@ class UserResponse(BaseModel):
     role: str
     avatar: Optional[str] = None
     is_active: bool
-    accepted_terms: bool = False
+    accepted_terms: bool
+    created_at: datetime
 
     class Config:
         from_attributes = True
 
-class UserListResponse(BaseModel):
-    id: str
-    name: str
-    email: str
-    role: str
-    is_active: bool
-
-    class Config:
-        from_attributes = True
+class AdminUserAction(BaseModel):
+    reason: Optional[str] = None
 
 router = APIRouter()
+
+def require_admin(current_user: User = Depends(get_current_user)):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Solo administradores")
+    return current_user
 
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
@@ -52,42 +53,88 @@ def update_me(
     db.refresh(current_user)
     return current_user
 
-@router.get("/", response_model=List[UserListResponse])
-def get_users(
+@router.get("/", response_model=List[UserResponse])
+def get_all_users(
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        admin: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Sin permiso")
-    return db.query(User).all()
+    return db.query(User).order_by(User.created_at.desc()).all()
+
+@router.get("/stats")
+def get_user_stats(
+        db: Session = Depends(get_db),
+        admin: User = Depends(require_admin)
+):
+    total = db.query(User).count()
+    active = db.query(User).filter(User.is_active == True).count()
+    by_role = {}
+    for role in UserRole:
+        count = db.query(User).filter(User.role == role).count()
+        by_role[role.value] = count
+    return {
+        "total": total,
+        "active": active,
+        "inactive": total - active,
+        "by_role": by_role,
+    }
+
+@router.put("/{user_id}/activate")
+def activate_user(
+        user_id: str,
+        db: Session = Depends(get_db),
+        admin: User = Depends(require_admin)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    user.is_active = True
+    db.commit()
+    return {"message": f"Usuario {user.name} activado"}
+
+@router.put("/{user_id}/deactivate")
+def deactivate_user(
+        user_id: str,
+        data: AdminUserAction,
+        db: Session = Depends(get_db),
+        admin: User = Depends(require_admin)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if user.role == UserRole.ADMIN:
+        raise HTTPException(status_code=400, detail="No puedes desactivar un admin")
+    user.is_active = False
+    db.commit()
+    return {"message": f"Usuario {user.name} desactivado. Razón: {data.reason}"}
 
 @router.put("/{user_id}/role")
 def change_role(
         user_id: str,
         role: str,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        admin: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Sin permiso")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    user.role = UserRole(role.upper())
+    try:
+        user.role = UserRole(role.upper())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Rol inválido")
     db.commit()
-    return {"message": "Rol actualizado"}
+    return {"message": f"Rol de {user.name} cambiado a {role}"}
 
-@router.put("/{user_id}/toggle-active")
-def toggle_active(
+@router.delete("/{user_id}")
+def delete_user_permanent(
         user_id: str,
         db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        admin: User = Depends(require_admin)
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Sin permiso")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    user.is_active = not user.is_active
+    if user.role == UserRole.ADMIN:
+        raise HTTPException(status_code=400, detail="No puedes eliminar un admin")
+    db.delete(user)
     db.commit()
-    return {"message": "Estado actualizado", "is_active": user.is_active}
+    return {"message": f"Usuario {user.name} eliminado permanentemente"}

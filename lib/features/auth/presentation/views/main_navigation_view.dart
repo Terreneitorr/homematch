@@ -658,24 +658,35 @@ class _AdminPanel extends StatefulWidget {
   State<_AdminPanel> createState() => _AdminPanelState();
 }
 
-class _AdminPanelState extends State<_AdminPanel> {
+class _AdminPanelState extends State<_AdminPanel>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   List<dynamic> _users = [];
-  Map<String, dynamic> _analytics = {};
+  Map<String, dynamic> _stats = {};
   bool _loading = true;
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     _load();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
+    setState(() => _loading = true);
     try {
       final usersRes = await DioClient().dio.get('/users/');
-      final analyticsRes = await DioClient().dio.get('/analytics/');
+      final statsRes = await DioClient().dio.get('/users/stats');
       setState(() {
         _users = usersRes.data;
-        _analytics = analyticsRes.data;
+        _stats = statsRes.data;
         _loading = false;
       });
     } catch (_) {
@@ -683,24 +694,96 @@ class _AdminPanelState extends State<_AdminPanel> {
     }
   }
 
-  Future<void> _toggleUser(String userId, bool currentStatus) async {
+  List<dynamic> get _filteredUsers {
+    if (_searchQuery.isEmpty) return _users;
+    return _users.where((u) =>
+    (u['name'] ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
+        (u['email'] ?? '').toLowerCase().contains(_searchQuery.toLowerCase())
+    ).toList();
+  }
+
+  List<dynamic> get _activeUsers =>
+      _filteredUsers.where((u) => u['is_active'] == true).toList();
+
+  List<dynamic> get _inactiveUsers =>
+      _filteredUsers.where((u) => u['is_active'] == false).toList();
+
+  Future<void> _activate(String userId, String name) async {
     try {
-      await DioClient().dio.put('/users/$userId/toggle-active');
+      await DioClient().dio.put('/users/$userId/activate');
       _load();
+      if (mounted) _showSnack('✓ $name activado', true);
     } catch (_) {}
   }
 
-  Future<void> _changeRole(BuildContext context, ThemeData theme, String userId) async {
+  Future<void> _deactivate(String userId, String name) async {
+    final theme = Theme.of(context);
+    final reason = await _showReasonDialog('Desactivar cuenta', name);
+    if (reason == null) return;
+    try {
+      await DioClient().dio.put(
+        '/users/$userId/deactivate',
+        data: {'reason': reason},
+      );
+      _load();
+      if (mounted) _showSnack('✓ $name desactivado', true);
+    } catch (_) {}
+  }
+
+  Future<void> _deleteUser(String userId, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.warning, color: theme.colorScheme.error),
+              const SizedBox(width: 8),
+              const Text('Eliminar permanente'),
+            ],
+          ),
+          content: Text(
+            '¿Estás seguro de eliminar a "$name" permanentemente?\n\nEsta acción NO se puede deshacer.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.error,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed == true) {
+      try {
+        await DioClient().dio.delete('/users/$userId');
+        _load();
+        if (mounted) _showSnack('✓ $name eliminado', true);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _changeRole(String userId, String name) async {
     final roles = ['USER', 'SELLER', 'AGENCY', 'ADMIN'];
+    final theme = Theme.of(context);
     final selected = await showDialog<String>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Cambiar rol'),
+      builder: (ctx) => AlertDialog(
+        title: Text('Cambiar rol de $name'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: roles.map((r) => ListTile(
-            title: Text(r),
-            onTap: () => Navigator.pop(context, r),
+            leading: Icon(_roleIcon(r), color: theme.colorScheme.primary),
+            title: Text(_roleLabel(r)),
+            onTap: () => Navigator.pop(ctx, r),
           )).toList(),
         ),
       ),
@@ -712,15 +795,63 @@ class _AdminPanelState extends State<_AdminPanel> {
           queryParameters: {'role': selected},
         );
         _load();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Rol actualizado a $selected'),
-              backgroundColor: theme.colorScheme.secondary,
-            ),
-          );
-        }
+        if (mounted) _showSnack('✓ Rol de $name cambiado a $selected', true);
       } catch (_) {}
+    }
+  }
+
+  Future<String?> _showReasonDialog(String title, String name) async {
+    final ctrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$title — $name'),
+        content: TextField(
+          controller: ctrl,
+          decoration: const InputDecoration(
+            labelText: 'Razón (opcional)',
+            hintText: 'Ej: Incumplimiento de términos',
+          ),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnack(String msg, bool success) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: success
+          ? Theme.of(context).colorScheme.secondary
+          : Theme.of(context).colorScheme.error,
+    ));
+  }
+
+  IconData _roleIcon(String role) {
+    switch (role) {
+      case 'ADMIN': return Icons.admin_panel_settings;
+      case 'AGENCY': return Icons.business;
+      case 'SELLER': return Icons.home_work;
+      default: return Icons.person;
+    }
+  }
+
+  String _roleLabel(String role) {
+    switch (role) {
+      case 'ADMIN': return 'Administrador';
+      case 'AGENCY': return 'Inmobiliaria';
+      case 'SELLER': return 'Vendedor';
+      default: return 'Comprador';
     }
   }
 
@@ -734,60 +865,349 @@ class _AdminPanelState extends State<_AdminPanel> {
         actions: [
           IconButton(
             icon: Icon(Icons.refresh, color: theme.colorScheme.primary),
-            onPressed: () { setState(() => _loading = true); _load(); },
+            onPressed: _load,
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: theme.colorScheme.primary,
+          unselectedLabelColor: theme.colorScheme.outline,
+          indicatorColor: theme.colorScheme.primary,
+          tabs: [
+            Tab(text: 'Stats'),
+            Tab(text: 'Activos (${_activeUsers.length})'),
+            Tab(text: 'Inactivos (${_inactiveUsers.length})'),
+          ],
+        ),
+      ),
+      body: _loading
+          ? Center(child: CircularProgressIndicator(
+          color: theme.colorScheme.primary))
+          : Column(
+        children: [
+          // Buscador
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Buscar usuario...',
+                prefixIcon: Icon(Icons.search,
+                    color: theme.colorScheme.outline),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () =>
+                      setState(() => _searchQuery = ''),
+                )
+                    : null,
+              ),
+              onChanged: (v) => setState(() => _searchQuery = v),
+            ),
+          ),
+
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // ── STATS ──
+                _buildStats(theme),
+
+                // ── ACTIVOS ──
+                _buildUserList(theme, _activeUsers, true),
+
+                // ── INACTIVOS ──
+                _buildUserList(theme, _inactiveUsers, false),
+              ],
+            ),
           ),
         ],
       ),
-      body: _loading
-          ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
-          : RefreshIndicator(
-        onRefresh: _load,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+
+  Widget _buildStats(ThemeData theme) {
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Resumen general
+          Row(
             children: [
-              // Stats globales
-              Text('Estadísticas globales',
-                  style: theme.textTheme.titleMedium),
-              const SizedBox(height: 12),
-              Row(
+              _StatCard(
+                theme: theme,
+                icon: Icons.people,
+                value: '${_stats['total'] ?? 0}',
+                label: 'Total usuarios',
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 12),
+              _StatCard(
+                theme: theme,
+                icon: Icons.check_circle,
+                value: '${_stats['active'] ?? 0}',
+                label: 'Activos',
+                color: theme.colorScheme.secondary,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _StatCard(
+                theme: theme,
+                icon: Icons.block,
+                value: '${_stats['inactive'] ?? 0}',
+                label: 'Inactivos',
+                color: theme.colorScheme.error,
+              ),
+              const SizedBox(width: 12),
+              _StatCard(
+                theme: theme,
+                icon: Icons.business,
+                value: '${(_stats['by_role'] ?? {})['AGENCY'] ?? 0}',
+                label: 'Inmobiliarias',
+                color: theme.colorScheme.tertiary,
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Distribución por rol
+          Text('Distribución por rol',
+              style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          ...[
+            ('USER', 'Compradores', theme.colorScheme.primary),
+            ('SELLER', 'Vendedores', theme.colorScheme.secondary),
+            ('AGENCY', 'Inmobiliarias', theme.colorScheme.tertiary),
+            ('ADMIN', 'Admins', theme.colorScheme.error),
+          ].map((item) {
+            final count = (_stats['by_role'] ?? {})[item.$1] ?? 0;
+            final total = _stats['total'] ?? 1;
+            final pct = total > 0 ? count / total : 0.0;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _StatCard(
-                    theme: theme,
-                    icon: Icons.people,
-                    value: '${_users.length}',
-                    label: 'Usuarios',
-                    color: theme.colorScheme.primary,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(item.$2, style: theme.textTheme.bodyMedium),
+                      Text('$count',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: item.$3,
+                            fontWeight: FontWeight.bold,
+                          )),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  _StatCard(
-                    theme: theme,
-                    icon: Icons.home_work,
-                    value: '${_analytics['total_properties'] ?? 0}',
-                    label: 'Propiedades',
-                    color: theme.colorScheme.secondary,
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: pct.toDouble(),
+                      minHeight: 8,
+                      backgroundColor:
+                      theme.colorScheme.surfaceContainerHighest,
+                      valueColor: AlwaysStoppedAnimation<Color>(item.$3),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+            );
+          }),
+        ],
+      ),
+    );
+  }
 
-              // Lista de usuarios
-              Text('Gestión de usuarios',
-                  style: theme.textTheme.titleMedium),
-              const SizedBox(height: 12),
-              ..._users.map((user) => _UserAdminCard(
-                theme: theme,
-                user: user,
-                onToggle: () => _toggleUser(
-                    user['id'], user['is_active'] ?? true),
-                onChangeRole: () =>
-                    _changeRole(context, theme, user['id']),
-              )),
-            ],
-          ),
+  Widget _buildUserList(
+      ThemeData theme, List<dynamic> users, bool isActive) {
+    if (users.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.people_outline,
+                size: 64, color: theme.colorScheme.outlineVariant),
+            const SizedBox(height: 16),
+            Text(
+              isActive ? 'No hay usuarios activos' : 'No hay usuarios inactivos',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: users.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (_, i) {
+          final user = users[i];
+          final role = user['role'] ?? 'USER';
+          final active = user['is_active'] ?? true;
+
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: active
+                    ? theme.colorScheme.outlineVariant
+                    : theme.colorScheme.error.withOpacity(0.3),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: active
+                          ? theme.colorScheme.primaryContainer
+                          : theme.colorScheme.errorContainer,
+                      child: Text(
+                        (user['name'] ?? 'U').substring(0, 1).toUpperCase(),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: active
+                              ? theme.colorScheme.onPrimaryContainer
+                              : theme.colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user['name'] ?? '',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            user['email'] ?? '',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Badge de rol
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _roleLabel(role),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Acciones
+                Row(
+                  children: [
+                    // Cambiar rol
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            _changeRole(user['id'], user['name']),
+                        icon: Icon(Icons.manage_accounts,
+                            size: 14,
+                            color: theme.colorScheme.primary),
+                        label: Text('Rol',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                            )),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 34),
+                          side: BorderSide(
+                              color: theme.colorScheme.outlineVariant),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+
+                    // Activar/Desactivar
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: active
+                            ? () => _deactivate(user['id'], user['name'])
+                            : () => _activate(user['id'], user['name']),
+                        icon: Icon(
+                          active ? Icons.block : Icons.check_circle_outline,
+                          size: 14,
+                          color: active
+                              ? theme.colorScheme.error
+                              : theme.colorScheme.secondary,
+                        ),
+                        label: Text(
+                          active ? 'Bloquear' : 'Activar',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: active
+                                ? theme.colorScheme.error
+                                : theme.colorScheme.secondary,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 34),
+                          side: BorderSide(
+                            color: active
+                                ? theme.colorScheme.error.withOpacity(0.5)
+                                : theme.colorScheme.secondary
+                                .withOpacity(0.5),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+
+                    // Eliminar permanente
+                    OutlinedButton(
+                      onPressed: () =>
+                          _deleteUser(user['id'], user['name']),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(34, 34),
+                        padding: EdgeInsets.zero,
+                        side: BorderSide(
+                            color: theme.colorScheme.error.withOpacity(0.5)),
+                      ),
+                      child: Icon(Icons.delete_forever,
+                          size: 16, color: theme.colorScheme.error),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
