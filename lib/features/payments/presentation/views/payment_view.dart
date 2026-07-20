@@ -4,6 +4,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
+import '../../../../core/security/inactivity_manager.dart';
 
 class PaymentView extends StatefulWidget {
   const PaymentView({super.key});
@@ -39,6 +40,13 @@ class _PaymentViewState extends State<PaymentView> {
   Future<void> _pay(String planId) async {
     setState(() { _paying = true; _selectedPlan = planId; });
     final theme = Theme.of(context);
+
+    // El PaymentSheet de Stripe es una UI nativa (no widgets de Flutter), así
+    // que el InactivityDetector no puede detectar los toques del usuario ahí
+    // dentro. Pausamos el timer aquí para no cerrarle la sesión a medio pago.
+    final inactivityManager = context.read<InactivityManager>();
+    inactivityManager.stopTimer();
+
     try {
       final res = await DioClient().dio.post(
         '/payments/create-subscription',
@@ -93,6 +101,9 @@ class _PaymentViewState extends State<PaymentView> {
         );
       }
     } finally {
+      // Se reactiva el timer de inactividad sin importar si el pago fue
+      // exitoso, falló, o el usuario canceló el PaymentSheet.
+      inactivityManager.resetTimer();
       if (mounted) {
         setState(() { _paying = false; _selectedPlan = null; });
       }

@@ -8,16 +8,21 @@ from typing import List, Dict, Tuple, Optional
 
 MODEL_PATH = "/app/model.pkl"
 SCALER_PATH = "/app/scaler.pkl"
+SEGMENT_MAP_PATH = "/app/segment_map.pkl"
 USER_MODEL_PATH = "/app/user_model.pkl"
 USER_SCALER_PATH = "/app/user_scaler.pkl"
 
-# Segmentos para propiedades
-SEGMENT_NAMES = {
-    0: "Departamento Económico",
-    1: "Casa Familiar",
-    2: "Residencia Premium",
-    3: "Propiedad de Inversión",
-}
+# Nombres de segmento en orden ascendente de precio: el primero es el más
+# barato, el último el más caro. El mapeo real cluster->nombre se calcula
+# dinámicamente en train_property_model() según el precio promedio de cada
+# cluster, NO según el número de cluster crudo que asigna K-Means (ese
+# número es arbitrario y puede cambiar de orden en cada reentrenamiento).
+ORDINAL_SEGMENT_NAMES = [
+    "Departamento Económico",
+    "Casa Familiar",
+    "Residencia Premium",
+    "Propiedad de Inversión",
+]
 
 TIPO_ENCODING = {
     "Casa": 0, "Departamento": 1,
@@ -30,7 +35,41 @@ def encode_tipo(tipo: str) -> int:
 
 
 def get_segment_name(cluster: int) -> str:
-    return SEGMENT_NAMES.get(cluster, f"Segmento {cluster}")
+    """
+    Traduce un número de cluster crudo de K-Means a un nombre de segmento,
+    usando el mapeo dinámico calculado en el último entrenamiento (guardado
+    en SEGMENT_MAP_PATH). Si no existe (modelo nunca entrenado con el código
+    nuevo), cae a un nombre genérico en vez de asumir un orden fijo incorrecto.
+    """
+    if os.path.exists(SEGMENT_MAP_PATH):
+        segment_map = joblib.load(SEGMENT_MAP_PATH)
+        if cluster in segment_map:
+            return segment_map[cluster]
+    return f"Segmento {cluster}"
+
+
+def _build_segment_map(kmeans: KMeans, scaler: StandardScaler) -> Dict[int, str]:
+    """
+    Calcula qué número de cluster corresponde a qué nombre de segmento,
+    ordenando los clusters por su precio promedio real (des-escalado),
+    no por el índice crudo que les puso K-Means.
+    """
+    # cluster_centers_ está en espacio escalado; lo regresamos a escala
+    # real para poder comparar precios de verdad entre clusters.
+    centers_original_scale = scaler.inverse_transform(kmeans.cluster_centers_)
+    # La columna 0 de las features es "precio" (ver el orden en
+    # train_property_model: precio, habitaciones, banos, metros, tipo_encoded)
+    avg_price_per_cluster = centers_original_scale[:, 0]
+
+    # Índices de cluster ordenados de más barato a más caro
+    clusters_sorted_by_price = np.argsort(avg_price_per_cluster)
+
+    segment_map: Dict[int, str] = {}
+    for rank, cluster_id in enumerate(clusters_sorted_by_price):
+        name_index = min(rank, len(ORDINAL_SEGMENT_NAMES) - 1)
+        segment_map[int(cluster_id)] = ORDINAL_SEGMENT_NAMES[name_index]
+
+    return segment_map
 
 
 def load_model() -> Tuple:
@@ -77,8 +116,11 @@ def train_property_model(data: List[dict]) -> Tuple:
     kmeans = KMeans(n_clusters=n, random_state=42, n_init=10)
     kmeans.fit(features_scaled)
 
+    segment_map = _build_segment_map(kmeans, scaler)
+
     joblib.dump(kmeans, MODEL_PATH)
     joblib.dump(scaler, SCALER_PATH)
+    joblib.dump(segment_map, SEGMENT_MAP_PATH)
     return kmeans, scaler
 
 
