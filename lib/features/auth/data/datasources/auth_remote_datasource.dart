@@ -9,6 +9,7 @@ abstract class AuthRemoteDataSource {
   Future<UserModel?> getCurrentUser();
   Future<String?> getStoredToken();
   Future<void> clearToken();
+  Future<void> acceptTerms();
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -69,6 +70,15 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<void> logout() async {
     try { await _googleSignIn.signOut(); } catch (_) {}
     await _client.deleteToken();
+  }
+
+  @override
+  Future<void> acceptTerms() async {
+    final response = await _client.dio.post('/auth/accept-terms');
+    final newToken = response.data['access_token'] as String?;
+    if (newToken != null) {
+      await _client.saveToken(newToken);
+    }
   }
 
   @override

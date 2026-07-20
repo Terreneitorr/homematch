@@ -130,4 +130,11 @@ class AuthViewModel extends ChangeNotifier {
   Future<void> updateUser(String name) async {
     await refreshUser();
   }
+
+  Future<void> acceptTerms() async {
+    try {
+      await _dataSource.acceptTerms();
+      await refreshUser();
+    } catch (_) {}
+  }
 }
