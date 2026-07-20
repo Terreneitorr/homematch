@@ -30,6 +30,14 @@
           }
         },
         {
+          "client_id": "578896202911-u0v25cn3248ifpqj6n27d29a2g0798e5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.corzo.HomeMatch",
+            "certificate_hash": "00e2f0a5be17383481aa17f465a3995ff664d0ff"
+          }
+        },
+        {
           "client_id": "578896202911-4fhr5j0fffmkgeh9kcqng1b6gug125jl.apps.googleusercontent.com",
           "client_type": 3
         }
