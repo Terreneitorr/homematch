@@ -29,15 +29,19 @@ class AppointmentStatus(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(String, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
-    password_hash = Column(String)
-    name = Column(String)
-    role = Column(String, default="USER")
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=True)
+    role = Column(Enum(UserRole), default=UserRole.USER)
     avatar = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     accepted_terms = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, server_default=func.now())
+    stripe_customer_id = Column(String, nullable=True)
+    stripe_subscription_id = Column(String, nullable=True)
+    subscription_plan = Column(String, nullable=True)
+    subscription_status = Column(String, nullable=True)
 
     properties = relationship("Property", back_populates="owner")
 

@@ -1,4 +1,4 @@
-package com.example.homematch
+package com.corzo.HomeMatch
 
 import android.os.Bundle
 import android.provider.Settings

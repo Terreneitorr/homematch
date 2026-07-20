@@ -9,6 +9,8 @@ class UserModel extends UserEntity {
     super.avatar,
     required super.isActive,
     super.acceptedTerms,
+    super.subscriptionPlan,
+    super.subscriptionStatus,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,8 @@ class UserModel extends UserEntity {
       avatar: json['avatar']?.toString(),
       isActive: json['is_active'] == true || json['is_active'] == null,
       acceptedTerms: json['accepted_terms'] == true,
+      subscriptionPlan: json['subscription_plan']?.toString(),
+      subscriptionStatus: json['subscription_status']?.toString(),
     );
   }
 
@@ -32,6 +36,8 @@ class UserModel extends UserEntity {
       'avatar': avatar,
       'is_active': isActive,
       'accepted_terms': acceptedTerms,
+      'subscription_plan': subscriptionPlan,
+      'subscription_status': subscriptionStatus,
     };
   }
 }

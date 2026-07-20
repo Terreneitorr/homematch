@@ -12,6 +12,11 @@ class PropertyRepositoryImpl implements PropertyRepository {
   }
 
   @override
+  Future<List<PropertyEntity>> searchProperties(String query, {int limit = 10}) async {
+    return await remoteDataSource.searchProperties(query, limit: limit);
+  }
+
+  @override
   Future<PropertyEntity> getPropertyById(String id) async {
     return await remoteDataSource.getPropertyById(id);
   }

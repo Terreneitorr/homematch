@@ -7,6 +7,51 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:578896202911:android:2c6b9bddb5fa92f5e166aa",
+        "android_client_info": {
+          "package_name": "com.corzo.HomeMatch"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "578896202911-6plvelgrlfu4iu08pnf698376lf7pkt3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.corzo.HomeMatch",
+            "certificate_hash": "5185863d8e772deb921b36120a36dc0fb76f10ed"
+          }
+        },
+        {
+          "client_id": "578896202911-qhd8p239f2gjoci59ta7sgc1pvv1nb6s.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.corzo.HomeMatch",
+            "certificate_hash": "f67816a0a5f0b1f53856a6e76444a8b58700d5c2"
+          }
+        },
+        {
+          "client_id": "578896202911-4fhr5j0fffmkgeh9kcqng1b6gug125jl.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDQBVWR0gFnOGC_38OZFPMB-VOpz00A6kQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "578896202911-4fhr5j0fffmkgeh9kcqng1b6gug125jl.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:578896202911:android:6613445c3e99435ce166aa",
         "android_client_info": {
           "package_name": "com.example.homematch"

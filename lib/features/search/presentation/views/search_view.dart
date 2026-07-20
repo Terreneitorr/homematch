@@ -83,6 +83,28 @@ class _SearchViewState extends State<SearchView> {
               },
             ),
           ),
+
+          // Aviso discreto si la búsqueda semántica falló y se usó fallback local
+          if (searchVM.errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline,
+                      size: 16, color: theme.colorScheme.outline),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      searchVM.errorMessage!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // Chips filtro rápido
           SizedBox(
             height: 40,
@@ -114,13 +136,16 @@ class _SearchViewState extends State<SearchView> {
             ),
           ),
           const SizedBox(height: 8),
+
           // Contador
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
                 Text(
-                  '${searchVM.results.length} resultados',
+                  searchVM.isLoading
+                      ? 'Buscando...'
+                      : '${searchVM.results.length} resultados',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -129,9 +154,12 @@ class _SearchViewState extends State<SearchView> {
             ),
           ),
           const SizedBox(height: 8),
+
           // Resultados
           Expanded(
-            child: searchVM.results.isEmpty
+            child: searchVM.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : searchVM.results.isEmpty
                 ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -150,8 +178,7 @@ class _SearchViewState extends State<SearchView> {
                       )),
                 ],
               ),
-            )
-                : GridView.builder(
+            ) : GridView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               gridDelegate:
               const SliverGridDelegateWithFixedCrossAxisCount(

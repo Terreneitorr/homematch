@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 
 class PaymentView extends StatefulWidget {
   const PaymentView({super.key});
@@ -37,47 +39,38 @@ class _PaymentViewState extends State<PaymentView> {
   Future<void> _pay(String planId) async {
     setState(() { _paying = true; _selectedPlan = planId; });
     final theme = Theme.of(context);
-
     try {
-      // 1. Crear PaymentIntent en backend
       final res = await DioClient().dio.post(
-        '/payments/create-payment-intent',
+        '/payments/create-subscription',
         data: {'plan': planId},
       );
-
       final clientSecret = res.data['client_secret'] as String;
-
-      // 2. Configurar hoja de pago de Stripe
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: clientSecret,
           merchantDisplayName: 'HomeMatch AI',
-          appearance: PaymentSheetAppearance(
-            colors: PaymentSheetAppearanceColors(
-              primary: theme.colorScheme.primary,
-            ),
-          ),
         ),
       );
-
-      // 3. Mostrar hoja de pago
       await Stripe.instance.presentPaymentSheet();
+
+      // El webhook de Stripe confirma el pago y activa la suscripción en el
+      // backend de forma asíncrona (puede tardar uno o dos segundos). Damos
+      // un pequeño margen antes de refrescar al usuario para darle tiempo.
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        await context.read<AuthViewModel>().refreshUser();
+      }
 
       if (mounted) {
         showDialog(
           context: context,
           builder: (_) => AlertDialog(
-            title: Row(
-              children: [
-                Icon(Icons.check_circle,
-                    color: theme.colorScheme.secondary),
-                const SizedBox(width: 8),
-                const Text('¡Pago exitoso!'),
-              ],
-            ),
-            content: const Text(
-              'Tu suscripción ha sido activada. ¡Disfruta HomeMatch AI Premium!',
-            ),
+            title: Row(children: [
+              Icon(Icons.check_circle, color: theme.colorScheme.secondary),
+              const SizedBox(width: 8),
+              const Text('¡Pago exitoso!'),
+            ]),
+            content: const Text('Tu suscripción ha sido activada.'),
             actions: [
               FilledButton(
                 onPressed: () => Navigator.pop(context),
@@ -90,118 +83,58 @@ class _PaymentViewState extends State<PaymentView> {
     } on StripeException catch (e) {
       if (e.error.code != FailureCode.Canceled && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.error.localizedMessage}'),
-            backgroundColor: theme.colorScheme.error,
-          ),
+          SnackBar(content: Text('Error: ${e.error.localizedMessage}')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+          SnackBar(content: Text('Error: $e')),
         );
       }
     } finally {
-      setState(() { _paying = false; _selectedPlan = null; });
+      if (mounted) {
+        setState(() { _paying = false; _selectedPlan = null; });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
-        title: Text('Suscripción Premium',
-            style: theme.textTheme.titleLarge),
+        title: Text('Suscripción Premium', style: theme.textTheme.titleLarge),
       ),
       body: _loading
-          ? Center(child: CircularProgressIndicator(
-          color: theme.colorScheme.primary))
+          ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
           : ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // Header
+          // Header premium
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  theme.colorScheme.primary,
-                  theme.colorScheme.primaryContainer,
-                ],
-              ),
+              gradient: LinearGradient(colors: [
+                theme.colorScheme.primary,
+                theme.colorScheme.primaryContainer,
+              ]),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Column(
-              children: [
-                Icon(Icons.workspace_premium,
-                    color: Colors.white, size: 48),
-                const SizedBox(height: 12),
-                Text(
-                  'HomeMatch AI Premium',
+            child: Column(children: [
+              Icon(Icons.workspace_premium, color: Colors.white, size: 48),
+              const SizedBox(height: 12),
+              Text('HomeMatch AI Premium',
                   style: GoogleFonts.playfairDisplay(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Desbloquea todas las funciones',
+                      fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+              const SizedBox(height: 6),
+              Text('Desbloquea todas las funciones',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withOpacity(0.85),
-                  ),
-                ),
-              ],
-            ),
+                      color: Colors.white.withOpacity(0.85))),
+            ]),
           ),
           const SizedBox(height: 24),
-
-          // Beneficios
-          Text('¿Qué incluye?',
-              style: theme.textTheme.titleMedium),
-          const SizedBox(height: 12),
-          ...[
-            ('Recomendaciones IA ilimitadas',
-            Icons.auto_awesome),
-            ('Comparador avanzado de propiedades',
-            Icons.compare),
-            ('Historial de búsquedas extendido',
-            Icons.history),
-            ('Soporte prioritario', Icons.support_agent),
-            ('Sin anuncios', Icons.block),
-          ].map((item) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.secondaryContainer,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(item.$2,
-                      size: 16,
-                      color: theme.colorScheme.secondary),
-                ),
-                const SizedBox(width: 12),
-                Text(item.$1,
-                    style: theme.textTheme.bodyMedium),
-              ],
-            ),
-          )),
-          const SizedBox(height: 24),
-
           // Planes
-          Text('Elige tu plan',
-              style: theme.textTheme.titleMedium),
-          const SizedBox(height: 12),
           ..._plans.map((plan) {
             final isSelected = _selectedPlan == plan['id'];
             return Container(
@@ -220,52 +153,29 @@ class _PaymentViewState extends State<PaymentView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          plan['name'],
-                          style: theme.textTheme.titleSmall
-                              ?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '\$${plan['price']} ${plan['currency']}',
+                  Row(children: [
+                    Expanded(child: Text(plan['name'],
+                        style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600))),
+                    Text('\$${plan['price']} ${plan['currency']}',
                         style: GoogleFonts.playfairDisplay(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
+                            fontSize: 20, fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary)),
+                  ]),
                   const SizedBox(height: 4),
-                  Text(
-                    plan['description'],
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
+                  Text(plan['description'],
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: (_paying)
-                          ? null
-                          : () => _pay(plan['id']),
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 44),
-                      ),
+                      onPressed: _paying ? null : () => _pay(plan['id']),
+                      style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
                       child: (_paying && isSelected)
-                          ? SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: theme.colorScheme.onPrimary,
-                        ),
-                      )
+                          ? SizedBox(width: 18, height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2,
+                              color: theme.colorScheme.onPrimary))
                           : const Text('Suscribirse'),
                     ),
                   ),
@@ -273,17 +183,12 @@ class _PaymentViewState extends State<PaymentView> {
               ),
             );
           }),
-
           const SizedBox(height: 16),
-          Center(
-            child: Text(
-              'Pagos procesados de forma segura por Stripe.\nPuedes cancelar en cualquier momento.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
-              ),
-            ),
-          ),
+          Center(child: Text(
+            'Pagos procesados de forma segura por Stripe.',
+            style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline),
+          )),
         ],
       ),
     );

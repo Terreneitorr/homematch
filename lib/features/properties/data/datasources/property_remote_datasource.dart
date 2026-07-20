@@ -4,6 +4,7 @@ import '../../domain/entities/property_entity.dart';
 
 abstract class PropertyRemoteDataSource {
   Future<List<PropertyModel>> getProperties();
+  Future<List<PropertyModel>> searchProperties(String query, {int limit = 10});
   Future<PropertyModel> getPropertyById(String id);
   Future<PropertyModel> createProperty(Map<String, dynamic> data);
   Future<void> deleteProperty(String id);
@@ -15,6 +16,17 @@ class PropertyRemoteDataSourceImpl implements PropertyRemoteDataSource {
   @override
   Future<List<PropertyModel>> getProperties() async {
     final response = await _client.dio.get('/properties/');
+    return (response.data as List)
+        .map((json) => PropertyModel.fromJson(json))
+        .toList();
+  }
+
+  @override
+  Future<List<PropertyModel>> searchProperties(String query, {int limit = 10}) async {
+    final response = await _client.dio.get(
+      '/properties/search',
+      queryParameters: {'q': query, 'limit': limit},
+    );
     return (response.data as List)
         .map((json) => PropertyModel.fromJson(json))
         .toList();

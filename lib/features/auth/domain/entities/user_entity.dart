@@ -6,6 +6,8 @@ class UserEntity {
   final String? avatar;
   final bool isActive;
   final bool acceptedTerms;
+  final String? subscriptionPlan;
+  final String? subscriptionStatus;
 
   const UserEntity({
     required this.id,
@@ -15,5 +17,10 @@ class UserEntity {
     this.avatar,
     required this.isActive,
     this.acceptedTerms = false,
+    this.subscriptionPlan,
+    this.subscriptionStatus,
   });
+
+  /// true si tiene cualquier plan de pago activo (premium_user o agency)
+  bool get isPremium => subscriptionPlan != null && subscriptionStatus == 'active';
 }

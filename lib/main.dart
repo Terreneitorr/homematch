@@ -40,7 +40,7 @@ void main() async {
   await Firebase.initializeApp();
   
   // Stripe
-  Stripe.publishableKey = 'pk_test_TU_PUBLISHABLE_KEY';
+  Stripe.publishableKey = 'pk_test_51Tv9XaAnoJRpC7akHvx4cQxODsfFYok7xVBoqdI0LPb3nHr0bZFVhhDgpc073zvYBpuOmg0UJ9tjU3pdx7fYq0EQ00NreRQ3Tu';
   await Stripe.instance.applySettings();
   
   // Inicializar FCM
@@ -125,7 +125,7 @@ class HomeMatchApp extends StatelessWidget {
             return favoritesVM!;
           },
         ),
-        ChangeNotifierProvider(create: (_) => SearchViewModel()),
+        ChangeNotifierProvider(create: (_) => SearchViewModel(propertyRepository)),
       ],
       child: Consumer<AuthViewModel>(
         builder: (context, authVM, _) {

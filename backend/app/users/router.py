@@ -21,6 +21,8 @@ class UserResponse(BaseModel):
     is_active: bool
     accepted_terms: bool
     created_at: datetime
+    subscription_plan: Optional[str] = None
+    subscription_status: Optional[str] = None
 
     class Config:
         from_attributes = True
