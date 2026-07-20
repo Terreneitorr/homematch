@@ -11,6 +11,7 @@ class UserModel extends UserEntity {
     super.acceptedTerms,
     super.subscriptionPlan,
     super.subscriptionStatus,
+    super.verificationStatus,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -24,6 +25,7 @@ class UserModel extends UserEntity {
       acceptedTerms: json['accepted_terms'] == true,
       subscriptionPlan: json['subscription_plan']?.toString(),
       subscriptionStatus: json['subscription_status']?.toString(),
+      verificationStatus: json['verification_status']?.toString(),
     );
   }
 
@@ -38,6 +40,7 @@ class UserModel extends UserEntity {
       'accepted_terms': acceptedTerms,
       'subscription_plan': subscriptionPlan,
       'subscription_status': subscriptionStatus,
+      'verification_status': verificationStatus,
     };
   }
 }

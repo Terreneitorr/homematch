@@ -62,12 +62,23 @@ class _PaymentViewState extends State<PaymentView> {
       );
       await Stripe.instance.presentPaymentSheet();
 
-      // El webhook de Stripe confirma el pago y activa la suscripción en el
-      // backend de forma asíncrona (puede tardar uno o dos segundos). Damos
-      // un pequeño margen antes de refrescar al usuario para darle tiempo.
-      await Future.delayed(const Duration(seconds: 2));
-      if (mounted) {
+      // El webhook de Stripe confirma el pago de forma asíncrona — puede
+      // tardar más de un par de segundos (sobre todo en el plan gratuito de
+      // Railway). En vez de refrescar una sola vez, reintentamos varias
+      // veces hasta que el rol del usuario realmente cambie, o hasta
+      // agotar los intentos.
+      final expectedRole = planId == 'agency' ? 'AGENCY' : 'SELLER';
+      bool confirmed = false;
+      for (int attempt = 0; attempt < 6; attempt++) {
+        await Future.delayed(const Duration(seconds: 2));
+        if (!mounted) break;
         await context.read<AuthViewModel>().refreshUser();
+        if (!mounted) break;
+        final currentRole = context.read<AuthViewModel>().user?.role;
+        if (currentRole == expectedRole) {
+          confirmed = true;
+          break;
+        }
       }
 
       if (mounted) {
@@ -75,11 +86,22 @@ class _PaymentViewState extends State<PaymentView> {
           context: context,
           builder: (_) => AlertDialog(
             title: Row(children: [
-              Icon(Icons.check_circle, color: theme.colorScheme.secondary),
+              Icon(
+                confirmed ? Icons.check_circle : Icons.hourglass_top,
+                color: confirmed
+                    ? theme.colorScheme.secondary
+                    : theme.colorScheme.tertiary,
+              ),
               const SizedBox(width: 8),
-              const Text('¡Pago exitoso!'),
+              Text(confirmed ? '¡Pago exitoso!' : 'Pago recibido'),
             ]),
-            content: const Text('Tu suscripción ha sido activada.'),
+            content: Text(
+              confirmed
+                  ? 'Tu suscripción ha sido activada.'
+                  : 'Tu pago se procesó correctamente, pero todavía estamos '
+                  'confirmando la activación. Cierra y abre la app en '
+                  'unos segundos si no ves los cambios reflejados.',
+            ),
             actions: [
               FilledButton(
                 onPressed: () => Navigator.pop(context),

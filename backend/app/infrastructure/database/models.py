@@ -42,6 +42,8 @@ class User(Base):
     stripe_subscription_id = Column(String, nullable=True)
     subscription_plan = Column(String, nullable=True)
     subscription_status = Column(String, nullable=True)
+    verification_document_url = Column(String, nullable=True)
+    verification_status = Column(String, nullable=True)
 
     properties = relationship("Property", back_populates="owner")
 

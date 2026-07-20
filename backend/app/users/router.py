@@ -23,12 +23,16 @@ class UserResponse(BaseModel):
     created_at: datetime
     subscription_plan: Optional[str] = None
     subscription_status: Optional[str] = None
+    verification_status: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 class AdminUserAction(BaseModel):
     reason: Optional[str] = None
+
+class VerificationDocumentRequest(BaseModel):
+    document_url: str
 
 router = APIRouter()
 
@@ -140,3 +144,77 @@ def delete_user_permanent(
     db.delete(user)
     db.commit()
     return {"message": f"Usuario {user.name} eliminado permanentemente"}
+
+
+@router.post("/me/verification-document")
+def submit_verification_document(
+        data: VerificationDocumentRequest,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    """
+    La inmobiliaria sube la URL de su documento (ya subido antes vía
+    POST /uploads/, igual que las fotos de propiedades) y queda en espera
+    de revisión del admin.
+    """
+    if current_user.role != UserRole.AGENCY:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo cuentas de tipo Inmobiliaria pueden subir documento de verificación",
+        )
+    current_user.verification_document_url = data.document_url
+    current_user.verification_status = "pending"
+    db.commit()
+    return {
+        "message": "Documento recibido, en espera de revisión",
+        "status": "pending",
+    }
+
+
+@router.get("/admin/verifications/pending")
+def list_pending_verifications(
+        db: Session = Depends(get_db),
+        admin: User = Depends(require_admin),
+):
+    users = (
+        db.query(User)
+        .filter(User.role == UserRole.AGENCY, User.verification_status == "pending")
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "name": u.name,
+            "email": u.email,
+            "document_url": u.verification_document_url,
+        }
+        for u in users
+    ]
+
+
+@router.post("/admin/verifications/{user_id}/approve")
+def approve_verification(
+        user_id: str,
+        db: Session = Depends(get_db),
+        admin: User = Depends(require_admin),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    target.verification_status = "approved"
+    db.commit()
+    return {"message": "Inmobiliaria verificada"}
+
+
+@router.post("/admin/verifications/{user_id}/reject")
+def reject_verification(
+        user_id: str,
+        db: Session = Depends(get_db),
+        admin: User = Depends(require_admin),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    target.verification_status = "rejected"
+    db.commit()
+    return {"message": "Verificación rechazada"}

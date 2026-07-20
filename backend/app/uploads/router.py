@@ -1,46 +1,140 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.infrastructure.database.database import get_db
-from app.infrastructure.security.dependencies import get_current_user
-from app.infrastructure.database.models import User
-import os
-import uuid
-import shutil
+from app.database import get_db
+from app.models import User
+from app.auth.dependencies import get_current_user
+from pydantic import BaseModel
+from typing import Optional
 
 router = APIRouter()
 
-UPLOAD_DIR = "/app/uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
-MAX_SIZE_MB = 5
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    avatar: Optional[str] = None
 
-@router.post("/")
-async def upload_file(
-        file: UploadFile = File(...),
+
+class UserResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    avatar: Optional[str] = None
+    is_active: bool
+    accepted_terms: bool = False
+    subscription_plan: Optional[str] = None
+    subscription_status: Optional[str] = None
+    verification_status: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@router.put("/me", response_model=UserResponse)
+def update_me(
+        data: UserUpdate,
+        db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(status_code=400, detail="Solo se permiten imágenes JPG, PNG o WEBP")
+    if data.name:
+        current_user.name = data.name
+    if data.avatar:
+        current_user.avatar = data.avatar
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
-    content = await file.read()
-    if len(content) > MAX_SIZE_MB * 1024 * 1024:
-        raise HTTPException(status_code=400, detail=f"El archivo no puede superar {MAX_SIZE_MB}MB")
+# Agregar estos imports arriba, junto a los que ya tienes:
+# from pydantic import BaseModel
+# from app.models import UserRole  (si UserRole no está ya importado)
 
-    ext = file.filename.split(".")[-1].lower()
-    filename = f"{uuid.uuid4()}.{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
 
-    with open(filepath, "wb") as f:
-        f.write(content)
+class VerificationDocumentRequest(BaseModel):
+    document_url: str
 
-    # Devolvemos solo la ruta relativa para evitar problemas si cambia la IP del servidor
-    return {"url": f"/uploads/{filename}", "filename": filename}
 
-@router.get("/{filename}")
-async def get_file(filename: str):
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="Archivo no encontrado")
-    return FileResponse(filepath)
+def require_admin(current_user: User):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Solo administradores")
+
+
+@router.post("/me/verification-document")
+def submit_verification_document(
+        data: VerificationDocumentRequest,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    """
+    La inmobiliaria sube la URL de su documento (ya subido antes vía
+    POST /uploads/, igual que las fotos de propiedades) y queda en espera
+    de revisión del admin.
+    """
+    if current_user.role != UserRole.AGENCY:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo cuentas de tipo Inmobiliaria pueden subir documento de verificación",
+        )
+    current_user.verification_document_url = data.document_url
+    current_user.verification_status = "pending"
+    db.commit()
+    return {
+        "message": "Documento recibido, en espera de revisión",
+        "status": "pending",
+    }
+
+
+@router.get("/admin/verifications/pending")
+def list_pending_verifications(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    require_admin(current_user)
+    users = (
+        db.query(User)
+        .filter(User.role == UserRole.AGENCY, User.verification_status == "pending")
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "name": u.name,
+            "email": u.email,
+            "document_url": u.verification_document_url,
+        }
+        for u in users
+    ]
+
+
+@router.post("/admin/verifications/{user_id}/approve")
+def approve_verification(
+        user_id: str,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    require_admin(current_user)
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    target.verification_status = "approved"
+    db.commit()
+    return {"message": "Inmobiliaria verificada"}
+
+
+@router.post("/admin/verifications/{user_id}/reject")
+def reject_verification(
+        user_id: str,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    require_admin(current_user)
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    target.verification_status = "rejected"
+    db.commit()
+    return {"message": "Verificación rechazada"}

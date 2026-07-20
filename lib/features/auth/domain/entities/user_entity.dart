@@ -8,6 +8,7 @@ class UserEntity {
   final bool acceptedTerms;
   final String? subscriptionPlan;
   final String? subscriptionStatus;
+  final String? verificationStatus;
 
   const UserEntity({
     required this.id,
@@ -19,6 +20,7 @@ class UserEntity {
     this.acceptedTerms = false,
     this.subscriptionPlan,
     this.subscriptionStatus,
+    this.verificationStatus,
   });
 
   /// true si tiene cualquier plan de pago activo (premium_user o agency)
