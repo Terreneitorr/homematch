@@ -9,33 +9,25 @@ abstract class AuthRemoteDataSource {
   Future<UserModel?> getCurrentUser();
   Future<String?> getStoredToken();
   Future<void> clearToken();
-  Future<UserModel?> acceptTerms();
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   final DioClient _client = DioClient();
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId:
-    '578896202911-4fhr5j0fffmkgeh9kcqng1b6gug125jl.apps.googleusercontent.com',
+    serverClientId: '578896202911-4fhr5j0fffmkgeh9kcqng1b6gug125jl.apps.googleusercontent.com',
     scopes: ['email', 'profile'],
   );
 
   @override
-  Future<String?> getStoredToken() async {
-    return await _client.getToken();
-  }
+  Future<String?> getStoredToken() async => await _client.getToken();
 
   @override
-  Future<void> clearToken() async {
-    await _client.deleteToken();
-  }
+  Future<void> clearToken() async => await _client.deleteToken();
 
   @override
   Future<UserModel> loginWithGoogle({String role = 'USER'}) async {
-    try {
-      await _googleSignIn.signOut();
-    } catch (_) {}
+    try { await _googleSignIn.signOut(); } catch (_) {}
 
     GoogleSignInAccount? account;
     try {
@@ -43,8 +35,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     } catch (e) {
       throw Exception('Error Google Sign In: $e');
     }
-
-    if (account == null) throw Exception('Login cancelado');
+    if (account == null) throw Exception('Login cancelado por el usuario');
 
     try {
       final response = await _client.dio.post('/auth/google', data: {
@@ -54,46 +45,29 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         'avatar': account.photoUrl,
         'role': role,
       });
-
-      print('RESPONSE DATA: ${response.data}');  // <- agrega esto
-      print('RESPONSE TYPE: ${response.data.runtimeType}');
-
       final data = response.data;
       await _client.saveToken(data['access_token']);
-
       return UserModel(
         id: data['user_id']?.toString() ?? '',
         name: data['name']?.toString() ?? '',
         email: data['email']?.toString() ?? '',
         role: data['role']?.toString() ?? 'USER',
+        avatar: data['avatar']?.toString() ?? account.photoUrl,
         isActive: true,
         acceptedTerms: data['accepted_terms'] == true,
+        subscriptionPlan: data['subscription_plan']?.toString(),
+        subscriptionStatus: data['subscription_status']?.toString(),
       );
-    } catch (e, stack) {
-      print('ERROR LOGIN: $e');
-      print('STACK: $stack');
+    } on DioException catch (e) {
+      throw Exception('Error: ${e.response?.data ?? e.message}');
+    } catch (e) {
       rethrow;
     }
   }
 
   @override
-  Future<UserModel?> acceptTerms() async {
-    final response = await _client.dio.post('/auth/accept-terms');
-    final data = response.data;
-    if (data['access_token'] != null) {
-      await _client.saveToken(data['access_token']);
-    }
-    if (data['user'] != null) {
-      return UserModel.fromJson(data['user']);
-    }
-    return null;
-  }
-
-  @override
   Future<void> logout() async {
-    try {
-      await _googleSignIn.signOut();
-    } catch (_) {}
+    try { await _googleSignIn.signOut(); } catch (_) {}
     await _client.deleteToken();
   }
 
@@ -105,16 +79,45 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       final response = await _client.dio.get('/users/me');
       final data = response.data;
       return UserModel(
-        id: data['id'],
-        name: data['name'],
-        email: data['email'],
-        role: data['role'],
-        avatar: data['avatar'],
+        id: data['id']?.toString() ?? '',
+        name: data['name']?.toString() ?? '',
+        email: data['email']?.toString() ?? '',
+        role: data['role']?.toString() ?? 'USER',
+        avatar: data['avatar']?.toString(),
         isActive: data['is_active'] ?? true,
-        acceptedTerms: data['accepted_terms'] ?? false,
+        acceptedTerms: data['accepted_terms'] == true,
+        subscriptionPlan: data['subscription_plan']?.toString(),
+        subscriptionStatus: data['subscription_status']?.toString(),
       );
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<UserModel> loginDirect({required String email, required String role}) async {
+    try {
+      final response = await _client.dio.post('/auth/google', data: {
+        'google_id': email.replaceAll('@', '_').replaceAll('.', '_'),
+        'name': email.split('@').first,
+        'email': email,
+        'avatar': null,
+        'role': role,
+      });
+      final data = response.data;
+      await _client.saveToken(data['access_token']);
+      return UserModel(
+        id: data['user_id']?.toString() ?? '',
+        name: data['name']?.toString() ?? '',
+        email: data['email']?.toString() ?? '',
+        role: data['role']?.toString() ?? 'USER',
+        avatar: data['avatar']?.toString(),
+        isActive: true,
+        acceptedTerms: data['accepted_terms'] == true,
+        subscriptionPlan: data['subscription_plan']?.toString(),
+        subscriptionStatus: data['subscription_status']?.toString(),
+      );
+    } on DioException catch (e) {
+      throw Exception('${e.response?.data ?? e.message}');
     }
   }
 }

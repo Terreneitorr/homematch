@@ -7,7 +7,8 @@ import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../../core/security/inactivity_manager.dart';
 
 class PaymentView extends StatefulWidget {
-  const PaymentView({super.key});
+  final String? preSelectedPlan;
+  const PaymentView({super.key, this.preSelectedPlan});
 
   @override
   State<PaymentView> createState() => _PaymentViewState();
@@ -145,9 +146,33 @@ class _PaymentViewState extends State<PaymentView> {
             ]),
           ),
           const SizedBox(height: 24),
+          if (widget.preSelectedPlan != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(children: [
+                Icon(Icons.info_outline,
+                    color: theme.colorScheme.onSecondaryContainer),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    widget.preSelectedPlan == 'agency'
+                        ? 'Para publicar como Inmobiliaria, primero activa esta suscripción.'
+                        : 'Para publicar como Vendedor, primero activa esta suscripción.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSecondaryContainer),
+                  ),
+                ),
+              ]),
+            ),
           // Planes
           ..._plans.map((plan) {
             final isSelected = _selectedPlan == plan['id'];
+            final isRequired = widget.preSelectedPlan == plan['id'];
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(16),
@@ -155,10 +180,10 @@ class _PaymentViewState extends State<PaymentView> {
                 color: theme.colorScheme.surfaceContainerLowest,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: isSelected
+                  color: isSelected || isRequired
                       ? theme.colorScheme.primary
                       : theme.colorScheme.outlineVariant,
-                  width: isSelected ? 2 : 1,
+                  width: isSelected || isRequired ? 2 : 1,
                 ),
               ),
               child: Column(
@@ -173,6 +198,13 @@ class _PaymentViewState extends State<PaymentView> {
                             fontSize: 20, fontWeight: FontWeight.bold,
                             color: theme.colorScheme.primary)),
                   ]),
+                  if (isRequired) ...[
+                    const SizedBox(height: 4),
+                    Text('Requerido para tu tipo de cuenta',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600)),
+                  ],
                   const SizedBox(height: 4),
                   Text(plan['description'],
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -200,6 +232,17 @@ class _PaymentViewState extends State<PaymentView> {
             style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline),
           )),
+          if (widget.preSelectedPlan != null) ...[
+            const SizedBox(height: 12),
+            Center(
+              child: TextButton(
+                onPressed: _paying
+                    ? null
+                    : () => context.read<AuthViewModel>().clearPendingUpgradeRole(),
+                child: const Text('Continuar como comprador (gratis)'),
+              ),
+            ),
+          ],
         ],
       ),
     );

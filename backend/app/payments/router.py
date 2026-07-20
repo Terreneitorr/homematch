@@ -171,6 +171,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 user.subscription_status = "active"
                 if user.subscription_plan == "agency":
                     user.role = UserRole.AGENCY
+                elif user.subscription_plan == "premium_user":
+                    user.role = UserRole.SELLER
                 db.commit()
 
     elif event_type == "customer.subscription.updated":
@@ -185,11 +187,14 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         subscription_id = data_object.get("id")
         user = db.query(User).filter(User.stripe_subscription_id == subscription_id).first()
         if user:
+            # Ahora que pagar es requisito real para ser SELLER/AGENCY (no un
+            # extra opcional), sí revertimos el rol a USER al cancelar/dejar
+            # de pagar — de lo contrario alguien podría cancelar y quedarse
+            # con el acceso de vendedor/agencia gratis para siempre.
+            if user.role in (UserRole.SELLER, UserRole.AGENCY):
+                user.role = UserRole.USER
             user.subscription_status = "canceled"
             user.subscription_plan = None
-            # Nota: no revertimos user.role automáticamente aquí (de AGENCY a USER)
-            # para no romper datos/propiedades que la agencia ya haya publicado.
-            # Si se requiere ese comportamiento, es una decisión de negocio a definir.
             db.commit()
 
     return {"status": "ok"}

@@ -22,13 +22,27 @@ class AuthViewModel extends ChangeNotifier {
   UserEntity? _user;
   String? _errorMessage;
 
+  // Rol que el usuario ELIGIÓ en el login (Vendedor/Inmobiliaria), pero que
+  // todavía no tiene realmente porque no ha pagado. Se usa en main.dart para
+  // decidir si hay que mandarlo a la pantalla de pago antes de dejarlo
+  // entrar a la app. Se limpia una vez que ya no aplica (pagó, o decidió
+  // seguir como comprador gratis).
+  String? _pendingUpgradeRole;
+
   AuthStatus get status => _status;
   UserEntity? get user => _user;
   String? get errorMessage => _errorMessage;
+  String? get pendingUpgradeRole => _pendingUpgradeRole;
 
-  bool get needsTermsAcceptance =>
-      _status == AuthStatus.authenticated &&
-          (_user?.acceptedTerms == false);
+  void setPendingUpgradeRole(String? role) {
+    _pendingUpgradeRole = role;
+    notifyListeners();
+  }
+
+  void clearPendingUpgradeRole() {
+    _pendingUpgradeRole = null;
+    notifyListeners();
+  }
 
   Future<void> _checkSession() async {
     try {
@@ -39,7 +53,7 @@ class AuthViewModel extends ChangeNotifier {
         return;
       }
       final user = await _dataSource.getCurrentUser()
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
       if (user != null && user.id.isNotEmpty) {
         _user = user;
         _status = AuthStatus.authenticated;
@@ -59,9 +73,20 @@ class AuthViewModel extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
+    // Si eligió un rol de pago, lo recordamos ANTES de llamar al backend —
+    // el backend siempre va a crear/mantener al usuario como USER hasta que
+    // pague de verdad, así que esta es la única forma de saber qué quería.
+    _pendingUpgradeRole = (role == 'SELLER' || role == 'AGENCY') ? role : null;
+
     try {
       _user = await _dataSource.loginWithGoogle(role: role);
       _status = AuthStatus.authenticated;
+
+      // Si ya tiene ese rol de verdad (ya había pagado antes), no hace
+      // falta mandarlo a pagar de nuevo.
+      if (_user!.role == _pendingUpgradeRole) {
+        _pendingUpgradeRole = null;
+      }
     } catch (e) {
       final msg = e.toString();
       if (msg.contains('cancelado')) {
@@ -71,36 +96,17 @@ class AuthViewModel extends ChangeNotifier {
         _status = AuthStatus.error;
         _errorMessage = msg.replaceAll('Exception: ', '');
       }
+      _pendingUpgradeRole = null;
     }
     notifyListeners();
-  }
-
-  Future<void> acceptTerms() async {
-    _errorMessage = null;
-    try {
-      final updatedUser = await _dataSource.acceptTerms();
-      if (updatedUser != null) {
-        _user = updatedUser;
-      } else {
-        // Fallback: si no viene el usuario en la respuesta, intentar cargarlo
-        final refreshed = await _dataSource.getCurrentUser();
-        if (refreshed != null) _user = refreshed;
-      }
-      notifyListeners();
-    } catch (e) {
-      _errorMessage = 'No se pudieron aceptar los términos. Reintenta.';
-      notifyListeners();
-      rethrow;
-    }
   }
 
   Future<void> logout() async {
     _user = null;
     _status = AuthStatus.unauthenticated;
     _errorMessage = null;
+    _pendingUpgradeRole = null;
     notifyListeners();
-
-    // Limpiar en background
     try {
       await _dataSource.logout();
     } catch (_) {}
@@ -111,6 +117,11 @@ class AuthViewModel extends ChangeNotifier {
       final user = await _dataSource.getCurrentUser();
       if (user != null) {
         _user = user;
+        // Si tras refrescar ya tiene el rol que estaba pendiente (se
+        // confirmó el pago), dejamos de bloquear el acceso.
+        if (_pendingUpgradeRole != null && user.role == _pendingUpgradeRole) {
+          _pendingUpgradeRole = null;
+        }
         notifyListeners();
       }
     } catch (_) {}

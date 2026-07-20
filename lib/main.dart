@@ -31,6 +31,7 @@ import 'features/properties/presentation/viewmodels/property_viewmodel.dart';
 import 'features/favorites/data/repositories/favorites_repository_impl.dart';
 import 'features/favorites/presentation/viewmodels/favorites_viewmodel.dart';
 import 'features/search/presentation/viewmodels/search_viewmodel.dart';
+import 'features/payments/presentation/views/payment_view.dart';
 
 // Clave global para navegación sin contexto (útil para inactividad y wipes)
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -163,6 +164,14 @@ class HomeMatchApp extends StatelessWidget {
       case AuthStatus.authenticated:
         if (authVM.user?.acceptedTerms == false) {
           return const TermsAcceptanceView();
+        }
+        // Eligió Vendedor/Inmobiliaria en el login pero todavía no pagó:
+        // lo mandamos a la pantalla de pago antes de dejarlo entrar.
+        if (authVM.pendingUpgradeRole != null) {
+          final plan = authVM.pendingUpgradeRole == 'AGENCY'
+              ? 'agency'
+              : 'premium_user';
+          return PaymentView(preSelectedPlan: plan);
         }
         return const MainNavigationView();
       case AuthStatus.unauthenticated:

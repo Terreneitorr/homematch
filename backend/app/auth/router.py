@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, UserRole
-from app.auth.schemas import RegisterRequest, LoginRequest, GoogleLoginRequest, TokenResponse
+from app.auth.schemas import (
+    RegisterRequest, LoginRequest,
+    GoogleLoginRequest, TokenResponse
+)
 from app.auth.utils import hash_password, verify_password, create_access_token
 from app.auth.dependencies import get_current_user
 import uuid
@@ -11,14 +14,12 @@ router = APIRouter()
 
 
 def get_role_value(role) -> str:
-    """Obtiene el valor del rol ya sea Enum o string"""
     if hasattr(role, 'value'):
         return role.value
     return str(role)
 
 
 def get_accepted_terms(user) -> bool:
-    """Obtiene accepted_terms de forma segura"""
     return getattr(user, 'accepted_terms', False) or False
 
 
@@ -32,7 +33,8 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         name=data.name,
         email=data.email,
         password_hash=hash_password(data.password),
-        role=UserRole(data.role.upper()) if data.role.upper() in UserRole.__members__ else UserRole.USER,
+        role=UserRole(data.role.upper()) if data.role.upper()
+                                            in UserRole.__members__ else UserRole.USER,
     )
     db.add(user)
     db.commit()
@@ -40,11 +42,8 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     role_value = get_role_value(user.role)
     token = create_access_token({"sub": user.id, "role": role_value})
     return TokenResponse(
-        access_token=token,
-        role=role_value,
-        user_id=user.id,
-        name=user.name,
-        email=user.email,
+        access_token=token, role=role_value,
+        user_id=user.id, name=user.name, email=user.email,
     )
 
 
@@ -57,11 +56,8 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     accepted = get_accepted_terms(user)
     token = create_access_token({"sub": user.id, "role": role_value})
     return TokenResponse(
-        access_token=token,
-        role=role_value,
-        user_id=user.id,
-        name=user.name,
-        email=user.email,
+        access_token=token, role=role_value,
+        user_id=user.id, name=user.name, email=user.email,
         accepted_terms=accepted,
     )
 
@@ -70,19 +66,19 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
     is_new = user is None
+
     if not user:
-        role_map = {
-            "USER": UserRole.USER,
-            "SELLER": UserRole.SELLER,
-            "AGENCY": UserRole.AGENCY,
-            "ADMIN": UserRole.ADMIN,
-        }
+        # Los usuarios nuevos SIEMPRE se crean como USER, sin importar qué
+        # rol hayan elegido en la pantalla de login. SELLER/AGENCY ya no se
+        # asignan directamente aquí — solo el webhook de Stripe los otorga,
+        # después de que la suscripción correspondiente se pague de verdad
+        # (ver payments/router.py, evento invoice.payment_succeeded).
         user = User(
             id=data.google_id,
             name=data.name,
             email=data.email,
             avatar=data.avatar,
-            role=role_map.get(data.role.upper(), UserRole.USER),
+            role=UserRole.USER,
             accepted_terms=False,
         )
         db.add(user)
@@ -105,6 +101,9 @@ def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
         email=user.email,
         accepted_terms=accepted,
         is_new_user=is_new,
+        avatar=user.avatar,
+        subscription_plan=user.subscription_plan,
+        subscription_status=user.subscription_status,
     )
 
 
