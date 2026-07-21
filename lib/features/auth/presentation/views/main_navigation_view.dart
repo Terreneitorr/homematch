@@ -25,6 +25,7 @@ import 'package:homematch_ai/features/payments/presentation/views/payment_view.d
 import 'package:homematch_ai/core/network/dio_client.dart';
 import 'package:homematch_ai/core/network/upload_service.dart' as upload;
 import 'package:homematch_ai/core/security/fcm_security_service.dart';
+import 'package:homematch_ai/features/profile/presentation/views/verification_document_view.dart';
 
 class MainNavigationView extends StatefulWidget {
   const MainNavigationView({super.key});
@@ -506,14 +507,51 @@ class _AgencyDashboardState extends State<_AgencyDashboard> {
   }
 
   void _showVerificationDialog(BuildContext context, ThemeData theme) {
+    final status = context.read<AuthViewModel>().user?.verificationStatus;
+
+    IconData icon;
+    Color color;
+    String title;
+    String message;
+    bool showUploadButton = false;
+
+    switch (status) {
+      case 'approved':
+        icon = Icons.verified;
+        color = theme.colorScheme.secondary;
+        title = 'Cuenta verificada';
+        message = 'Tu inmobiliaria ya está verificada por HomeMatch AI.';
+        break;
+      case 'pending':
+        icon = Icons.hourglass_top;
+        color = theme.colorScheme.tertiary;
+        title = 'En revisión';
+        message = 'Tu documento está siendo revisado por el equipo de HomeMatch AI.';
+        break;
+      case 'rejected':
+        icon = Icons.error_outline;
+        color = theme.colorScheme.error;
+        title = 'Documento rechazado';
+        message = 'Tu documento fue rechazado. Sube uno nuevo para volver a intentarlo.';
+        showUploadButton = true;
+        break;
+      default:
+        icon = Icons.upload_file;
+        color = theme.colorScheme.outline;
+        title = 'Sin verificar';
+        message = 'Aún no has subido tu documento de verificación (RFC/cédula). '
+            'Sin verificación, tu cuenta sigue activa pero sin el sello de confianza.';
+        showUploadButton = true;
+    }
+
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.verified, color: theme.colorScheme.secondary),
+            Icon(icon, color: color),
             const SizedBox(width: 8),
-            const Text('Verificación'),
+            Text(title),
           ],
         ),
         content: Column(
@@ -523,32 +561,26 @@ class _AgencyDashboardState extends State<_AgencyDashboard> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: theme.colorScheme.secondaryContainer,
+                color: color.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle,
-                      color: theme.colorScheme.secondary, size: 20),
-                  const SizedBox(width: 8),
-                  Text('Cuenta activa',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSecondaryContainer,
-                        fontWeight: FontWeight.w600,
-                      )),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Tu cuenta de inmobiliaria está activa. Para obtener el sello de verificación, contacta al administrador.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              child: Text(
+                message,
+                style: theme.textTheme.bodySmall?.copyWith(color: color),
               ),
             ),
           ],
         ),
         actions: [
+          if (showUploadButton)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => const VerificationDocumentView()));
+              },
+              child: const Text('Subir documento'),
+            ),
           FilledButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Entendido'),
@@ -663,13 +695,14 @@ class _AdminPanelState extends State<_AdminPanel>
   late TabController _tabController;
   List<dynamic> _users = [];
   Map<String, dynamic> _stats = {};
+  List<dynamic> _pendingVerifications = [];
   bool _loading = true;
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _load();
   }
 
@@ -684,9 +717,16 @@ class _AdminPanelState extends State<_AdminPanel>
     try {
       final usersRes = await DioClient().dio.get('/users/');
       final statsRes = await DioClient().dio.get('/users/stats');
+      List<dynamic> pending = [];
+      try {
+        final pendingRes =
+        await DioClient().dio.get('/users/admin/verifications/pending');
+        pending = pendingRes.data;
+      } catch (_) {}
       setState(() {
         _users = usersRes.data;
         _stats = statsRes.data;
+        _pendingVerifications = pending;
         _loading = false;
       });
     } catch (_) {
@@ -870,6 +910,7 @@ class _AdminPanelState extends State<_AdminPanel>
         ],
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
           labelColor: theme.colorScheme.primary,
           unselectedLabelColor: theme.colorScheme.outline,
           indicatorColor: theme.colorScheme.primary,
@@ -877,6 +918,7 @@ class _AdminPanelState extends State<_AdminPanel>
             Tab(text: 'Stats'),
             Tab(text: 'Activos (${_activeUsers.length})'),
             Tab(text: 'Inactivos (${_inactiveUsers.length})'),
+            Tab(text: 'Verificaciones (${_pendingVerifications.length})'),
           ],
         ),
       ),
@@ -917,6 +959,9 @@ class _AdminPanelState extends State<_AdminPanel>
 
                 // ── INACTIVOS ──
                 _buildUserList(theme, _inactiveUsers, false),
+
+                // ── VERIFICACIONES ──
+                _buildVerifications(theme),
               ],
             ),
           ),
@@ -1129,6 +1174,64 @@ class _AdminPanelState extends State<_AdminPanel>
                     ),
                   ],
                 ),
+
+                // Badge de suscripción de pago (si aplica)
+                if (user['subscription_plan'] != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.tertiaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.workspace_premium,
+                            size: 12,
+                            color: theme.colorScheme.onTertiaryContainer),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${user['subscription_plan'] == 'agency' ? 'Plan Inmobiliaria' : 'Plan Premium'}'
+                              ' · ${user['subscription_status'] ?? 'sin estado'}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onTertiaryContainer,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Badge de verificación (solo para inmobiliarias)
+                if (role == 'AGENCY' && user['verification_status'] != null) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: user['verification_status'] == 'approved'
+                          ? theme.colorScheme.secondaryContainer
+                          : user['verification_status'] == 'rejected'
+                          ? theme.colorScheme.errorContainer
+                          : theme.colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      user['verification_status'] == 'approved'
+                          ? 'Verificada'
+                          : user['verification_status'] == 'rejected'
+                          ? 'Verificación rechazada'
+                          : 'Verificación pendiente',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 10),
 
                 // Acciones
@@ -1210,6 +1313,144 @@ class _AdminPanelState extends State<_AdminPanel>
         },
       ),
     );
+  }
+
+  Widget _buildVerifications(ThemeData theme) {
+    if (_pendingVerifications.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.verified_outlined,
+                size: 64, color: theme.colorScheme.outlineVariant),
+            const SizedBox(height: 16),
+            Text('No hay verificaciones pendientes',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                )),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: _pendingVerifications.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (_, i) {
+          final v = _pendingVerifications[i];
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(v['name'] ?? '',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    )),
+                Text(v['email'] ?? '',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    )),
+                const SizedBox(height: 10),
+                if (v['document_url'] != null)
+                  GestureDetector(
+                    onTap: () => _viewDocument(context, v['document_url']),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: CachedNetworkImage(
+                        imageUrl:
+                        upload.UploadService.getFullUrl(v['document_url']),
+                        height: 160,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(
+                          height: 160,
+                          color: theme.colorScheme.surfaceContainerHigh,
+                        ),
+                        errorWidget: (_, __, ___) => Container(
+                          height: 160,
+                          color: theme.colorScheme.surfaceContainerHigh,
+                          child: const Icon(Icons.broken_image),
+                        ),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () =>
+                            _approveVerification(v['id'], v['name']),
+                        icon: const Icon(Icons.check, size: 16),
+                        label: const Text('Aprobar'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 40),
+                          backgroundColor: theme.colorScheme.secondary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            _rejectVerification(v['id'], v['name']),
+                        icon: Icon(Icons.close,
+                            size: 16, color: theme.colorScheme.error),
+                        label: Text('Rechazar',
+                            style: TextStyle(color: theme.colorScheme.error)),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 40),
+                          side: BorderSide(
+                              color: theme.colorScheme.error.withOpacity(0.5)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _viewDocument(BuildContext context, String documentUrl) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        child: InteractiveViewer(
+          child: CachedNetworkImage(
+            imageUrl: upload.UploadService.getFullUrl(documentUrl),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _approveVerification(String userId, String name) async {
+    try {
+      await DioClient().dio.post('/users/admin/verifications/$userId/approve');
+      _load();
+      if (mounted) _showSnack('✓ $name verificado', true);
+    } catch (_) {}
+  }
+
+  Future<void> _rejectVerification(String userId, String name) async {
+    try {
+      await DioClient().dio.post('/users/admin/verifications/$userId/reject');
+      _load();
+      if (mounted) _showSnack('✗ Verificación de $name rechazada', false);
+    } catch (_) {}
   }
 }
 

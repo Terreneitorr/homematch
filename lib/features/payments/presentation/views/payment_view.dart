@@ -82,8 +82,9 @@ class _PaymentViewState extends State<PaymentView> {
       }
 
       if (mounted) {
-        showDialog(
+        await showDialog(
           context: context,
+          barrierDismissible: false,
           builder: (_) => AlertDialog(
             title: Row(children: [
               Icon(
@@ -97,19 +98,22 @@ class _PaymentViewState extends State<PaymentView> {
             ]),
             content: Text(
               confirmed
-                  ? 'Tu suscripción ha sido activada.'
-                  : 'Tu pago se procesó correctamente, pero todavía estamos '
-                  'confirmando la activación. Cierra y abre la app en '
-                  'unos segundos si no ves los cambios reflejados.',
+                  ? 'Tu suscripción ha sido activada. Por seguridad, vuelve '
+                  'a iniciar sesión para continuar con tu cuenta actualizada.'
+                  : 'Tu pago se procesó correctamente. Vuelve a iniciar '
+                  'sesión en unos momentos para ver tu cuenta actualizada.',
             ),
             actions: [
               FilledButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Continuar'),
+                child: const Text('Entendido'),
               ),
             ],
           ),
         );
+        if (mounted) {
+          await context.read<AuthViewModel>().logout();
+        }
       }
     } on StripeException catch (e) {
       if (e.error.code != FailureCode.Canceled && mounted) {
