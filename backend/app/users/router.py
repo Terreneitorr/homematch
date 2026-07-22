@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.database import get_db
-from app.models import User, UserRole
+from app.models import User, UserRole, Property, SearchHistory, Appointment
 from app.auth.dependencies import get_current_user
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 
 class UserUpdate(BaseModel):
@@ -218,3 +219,56 @@ def reject_verification(
     target.verification_status = "rejected"
     db.commit()
     return {"message": "Verificación rechazada"}
+
+
+@router.get("/admin/dashboard-stats")
+def admin_dashboard_stats(
+        db: Session = Depends(get_db),
+        admin: User = Depends(require_admin),
+):
+    """
+    Estadísticas de uso para el dashboard del admin:
+    - Total de propiedades publicadas
+    - Quiénes publican más (top 10 usuarios por número de propiedades)
+    - Actividad de los últimos 7 días (propiedades nuevas, búsquedas, citas)
+    """
+    total_properties = db.query(Property).count()
+
+    top_publishers_raw = (
+        db.query(Property.owner_id, User.name, func.count(Property.id).label("total"))
+        .join(User, User.id == Property.owner_id)
+        .group_by(Property.owner_id, User.name)
+        .order_by(func.count(Property.id).desc())
+        .limit(10)
+        .all()
+    )
+    top_publishers = [
+        {"owner_id": owner_id, "name": name, "properties_count": total}
+        for owner_id, name, total in top_publishers_raw
+    ]
+
+    today = datetime.utcnow().date()
+    activity = []
+    for i in range(6, -1, -1):
+        day = today - timedelta(days=i)
+        properties_count = db.query(Property).filter(
+            func.date(Property.created_at) == day
+        ).count()
+        searches_count = db.query(SearchHistory).filter(
+            func.date(SearchHistory.searched_at) == day
+        ).count()
+        appointments_count = db.query(Appointment).filter(
+            func.date(Appointment.created_at) == day
+        ).count()
+        activity.append({
+            "date": day.isoformat(),
+            "properties": properties_count,
+            "searches": searches_count,
+            "appointments": appointments_count,
+        })
+
+    return {
+        "total_properties": total_properties,
+        "top_publishers": top_publishers,
+        "activity_last_7_days": activity,
+    }

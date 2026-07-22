@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:homematch_ai/features/analytics/presentation/views/analytics_view.dart' hide AnalyticsView;
@@ -26,6 +27,7 @@ import 'package:homematch_ai/core/network/dio_client.dart';
 import 'package:homematch_ai/core/network/upload_service.dart' as upload;
 import 'package:homematch_ai/core/security/fcm_security_service.dart';
 import 'package:homematch_ai/features/profile/presentation/views/verification_document_view.dart';
+import 'package:homematch_ai/core/security/inactivity_manager.dart';
 
 class MainNavigationView extends StatefulWidget {
   const MainNavigationView({super.key});
@@ -44,6 +46,17 @@ class MainNavigationViewState extends State<MainNavigationView> {
   @override
   void initState() {
     super.initState();
+
+    // Cualquiera que haya sido el estado del timer de inactividad antes
+    // (venir de un logout manual, del pago, o de una sesión anterior que
+    // expiró), al entrar de verdad a la app se reinicia limpio. Sin esto,
+    // un timer que se cumple de fondo durante el login puede dejar
+    // "sessionExpired" en true y el diálogo aparece apenas entras.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<InactivityManager>().resetSession();
+      }
+    });
 
     // Inicializar FCM con el context
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -696,19 +709,27 @@ class _AdminPanelState extends State<_AdminPanel>
   List<dynamic> _users = [];
   Map<String, dynamic> _stats = {};
   List<dynamic> _pendingVerifications = [];
+  Map<String, dynamic> _dashboardStats = {};
   bool _loading = true;
   String _searchQuery = '';
+  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _load();
+    // Auto-refresh de las estadísticas cada 60 segundos, sin que el admin
+    // tenga que jalar hacia abajo o darle a refrescar manualmente.
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (mounted) _load();
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _autoRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -723,10 +744,16 @@ class _AdminPanelState extends State<_AdminPanel>
         await DioClient().dio.get('/users/admin/verifications/pending');
         pending = pendingRes.data;
       } catch (_) {}
+      Map<String, dynamic> dashboard = {};
+      try {
+        final dashRes = await DioClient().dio.get('/users/admin/dashboard-stats');
+        dashboard = dashRes.data;
+      } catch (_) {}
       setState(() {
         _users = usersRes.data;
         _stats = statsRes.data;
         _pendingVerifications = pending;
+        _dashboardStats = dashboard;
         _loading = false;
       });
     } catch (_) {
@@ -1062,6 +1089,64 @@ class _AdminPanelState extends State<_AdminPanel>
               ),
             );
           }),
+
+          const SizedBox(height: 24),
+
+          // Publicaciones totales + quién publica más
+          Text('Publicaciones', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 12),
+          _StatCard(
+            theme: theme,
+            icon: Icons.home_work,
+            value: '${_dashboardStats['total_properties'] ?? 0}',
+            label: 'Propiedades publicadas en total',
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(height: 16),
+
+          if ((_dashboardStats['top_publishers'] as List?)?.isNotEmpty ?? false) ...[
+            Text('Quién publica más', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            ...(_dashboardStats['top_publishers'] as List).map((p) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(p['name'] ?? '',
+                          style: theme.textTheme.bodySmall,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    Text('${p['properties_count']}',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        )),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 24),
+          ],
+
+          // Gráfica de actividad de los últimos 7 días
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Actividad (últimos 7 días)',
+                  style: theme.textTheme.titleMedium),
+              Text('Se actualiza solo cada minuto',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  )),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _ActivityChart(
+            theme: theme,
+            data: (_dashboardStats['activity_last_7_days'] as List?) ?? [],
+          ),
         ],
       ),
     );
@@ -1823,6 +1908,92 @@ class _ProfileView extends StatelessWidget {
 }
 
 // ─── SHARED WIDGETS ───────────────────────────────────────────────
+class _ActivityChart extends StatelessWidget {
+  final ThemeData theme;
+  final List<dynamic> data;
+
+  const _ActivityChart({required this.theme, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.isEmpty) {
+      return Container(
+        height: 120,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Text('Sin datos de actividad todavía',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            )),
+      );
+    }
+
+    // Actividad total del día = propiedades nuevas + búsquedas + citas
+    final totals = data.map((d) {
+      final props = (d['properties'] ?? 0) as int;
+      final searches = (d['searches'] ?? 0) as int;
+      final appointments = (d['appointments'] ?? 0) as int;
+      return props + searches + appointments;
+    }).toList();
+
+    final maxValue = totals.isEmpty
+        ? 1
+        : totals.reduce((a, b) => a > b ? a : b).clamp(1, 1 << 30);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: List.generate(data.length, (i) {
+          final day = data[i];
+          final total = totals[i];
+          final barHeight = total == 0 ? 4.0 : (total / maxValue) * 90.0 + 4.0;
+          final dateStr = (day['date'] ?? '').toString();
+          final dayLabel = dateStr.length >= 10
+              ? dateStr.substring(8, 10)
+              : '';
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('$total',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  )),
+              const SizedBox(height: 4),
+              Container(
+                width: 22,
+                height: barHeight,
+                decoration: BoxDecoration(
+                  color: total == 0
+                      ? theme.colorScheme.surfaceContainerHighest
+                      : theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(dayLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  )),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+}
+
 class _StatCard extends StatelessWidget {
   final ThemeData theme;
   final IconData icon;
