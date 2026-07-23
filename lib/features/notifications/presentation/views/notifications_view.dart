@@ -54,6 +54,61 @@ class _NotificationsViewState extends State<NotificationsView> {
     } catch (_) {}
   }
 
+  Future<void> _deleteOne(String id) async {
+    final removed = _notifications.firstWhere((n) => n['id'] == id);
+    final wasUnread = removed['is_read'] == false;
+    setState(() {
+      _notifications.removeWhere((n) => n['id'] == id);
+      if (wasUnread) _unreadCount = (_unreadCount - 1).clamp(0, 999);
+    });
+    try {
+      await DioClient().dio.delete('/notifications/$id');
+    } catch (_) {
+      // Si falla en el servidor, recargamos para no dejar la UI desincronizada
+      _load();
+    }
+  }
+
+  Future<void> _clearAll() async {
+    final theme = Theme.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Limpiar notificaciones'),
+        content: const Text('¿Deseas eliminar todas tus notificaciones?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: theme.colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Limpiar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await DioClient().dio.delete('/notifications/');
+      setState(() {
+        _notifications = [];
+        _unreadCount = 0;
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No se pudo limpiar, intenta de nuevo'),
+            backgroundColor: theme.colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
   IconData _getIcon(String type) {
     switch (type) {
       case 'appointment':
@@ -124,6 +179,12 @@ class _NotificationsViewState extends State<NotificationsView> {
                 ),
               ),
             ),
+          if (_notifications.isNotEmpty)
+            IconButton(
+              tooltip: 'Limpiar todo',
+              icon: Icon(Icons.delete_sweep_outlined, color: theme.colorScheme.error),
+              onPressed: _clearAll,
+            ),
         ],
       ),
       body: _loading
@@ -175,90 +236,101 @@ class _NotificationsViewState extends State<NotificationsView> {
               createdAt = DateTime.parse(n['created_at']);
             } catch (_) {}
 
-            return InkWell(
-              onTap: () {
-                if (!isRead) _markRead(n['id']);
-              },
-              child: Container(
-                color: isRead
-                    ? null
-                    : theme.colorScheme.primaryContainer
-                    .withOpacity(0.3),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Ícono
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
+            return Dismissible(
+              key: ValueKey(n['id']),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                color: theme.colorScheme.error,
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Icon(Icons.delete_outline, color: theme.colorScheme.onError),
+              ),
+              onDismissed: (_) => _deleteOne(n['id']),
+              child: InkWell(
+                onTap: () {
+                  if (!isRead) _markRead(n['id']);
+                },
+                child: Container(
+                  color: isRead
+                      ? null
+                      : theme.colorScheme.primaryContainer
+                      .withOpacity(0.3),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Ícono
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          _getIcon(type),
+                          color: color,
+                          size: 22,
+                        ),
                       ),
-                      child: Icon(
-                        _getIcon(type),
-                        color: color,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Contenido
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  n['title'] ?? '',
-                                  style: theme.textTheme.bodyMedium
-                                      ?.copyWith(
-                                    fontWeight: isRead
-                                        ? FontWeight.normal
-                                        : FontWeight.w600,
+                      const SizedBox(width: 12),
+                      // Contenido
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    n['title'] ?? '',
+                                    style: theme.textTheme.bodyMedium
+                                        ?.copyWith(
+                                      fontWeight: isRead
+                                          ? FontWeight.normal
+                                          : FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              if (!isRead)
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color:
-                                    theme.colorScheme.primary,
-                                    shape: BoxShape.circle,
+                                if (!isRead)
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color:
+                                      theme.colorScheme.primary,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            n['body'] ?? '',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(
-                              color: theme
-                                  .colorScheme.onSurfaceVariant,
-                              height: 1.4,
+                              ],
                             ),
-                          ),
-                          if (createdAt != null) ...[
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 4),
                             Text(
-                              _timeAgo(createdAt),
-                              style: theme.textTheme.labelSmall
+                              n['body'] ?? '',
+                              style: theme.textTheme.bodySmall
                                   ?.copyWith(
-                                color: theme.colorScheme.outline,
+                                color: theme
+                                    .colorScheme.onSurfaceVariant,
+                                height: 1.4,
                               ),
                             ),
+                            if (createdAt != null) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                _timeAgo(createdAt),
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(
+                                  color: theme.colorScheme.outline,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );

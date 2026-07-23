@@ -21,3 +21,12 @@ def add_history(query: str, db: Session = Depends(get_db), current_user: User = 
     db.add(entry)
     db.commit()
     return {"message": "Guardado"}
+
+@router.delete("/")
+def clear_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Borra TODO el historial de búsquedas del usuario actual."""
+    db.query(SearchHistory).filter(
+        SearchHistory.user_id == current_user.id
+    ).delete()
+    db.commit()
+    return {"message": "Historial eliminado"}

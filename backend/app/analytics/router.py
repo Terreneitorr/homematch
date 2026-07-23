@@ -1,10 +1,50 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.models import User, Property, Favorite
 from app.database import get_db
 from app.auth.dependencies import get_current_user
 
 router = APIRouter()
+
+
+@router.get("/")
+def get_market_analytics(db: Session = Depends(get_db)):
+    """
+    Estadísticas generales del mercado, usadas por AnalyticsView en la app
+    (pantalla "Estadísticas del mercado" en los perfiles de Vendedor/Inmobiliaria).
+    """
+    total_properties = db.query(Property).count()
+    avg_price = db.query(func.avg(Property.price)).scalar() or 0
+
+    city_counts = (
+        db.query(Property.city, func.count(Property.id).label("total"))
+        .group_by(Property.city)
+        .order_by(func.count(Property.id).desc())
+        .limit(10)
+        .all()
+    )
+    by_city = [
+        {"city": city, "count": count}
+        for city, count in city_counts if city
+    ]
+
+    op_counts = (
+        db.query(Property.operation_type, func.count(Property.id).label("total"))
+        .group_by(Property.operation_type)
+        .all()
+    )
+    by_operation_type = [
+        {"type": op_type, "count": count}
+        for op_type, count in op_counts if op_type
+    ]
+
+    return {
+        "total_properties": total_properties,
+        "average_price": float(avg_price),
+        "by_city": by_city,
+        "by_operation_type": by_operation_type,
+    }
 
 
 @router.get("/users-favorites-data")

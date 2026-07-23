@@ -1,9 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import router
-from app.database import init_db
+from app.database import init_db, get_db, Inference
 from app.model.classifier import load_model, train_property_model
-import os
 
 app = FastAPI(
     title="HomeMatch AI - ML Service",
@@ -18,9 +17,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Datos base de respaldo, por si el modelo se pierde (Railway usa disco
-# efímero: si el contenedor se redespliega, model.pkl/segment_map.pkl
-# desaparecen) y no hay suficientes datos reales todavía en la BD.
+# Datos base de respaldo, solo se usan si no hay NADA en la base de datos
+# todavía (por ejemplo, un despliegue completamente nuevo).
 BASE_TRAINING_DATA = [
     {"precio": 450000, "habitaciones": 1, "banos": 1, "metros": 45, "tipo": "Departamento"},
     {"precio": 800000, "habitaciones": 2, "banos": 1, "metros": 65, "tipo": "Departamento"},
@@ -33,19 +31,50 @@ BASE_TRAINING_DATA = [
 ]
 
 
+def _load_real_training_data():
+    """Intenta juntar datos reales de la tabla Inference para entrenar."""
+    try:
+        db = next(get_db())
+        try:
+            inferences = db.query(Inference).all()
+            data = [
+                {
+                    "precio": inf.precio,
+                    "habitaciones": inf.habitaciones,
+                    "banos": inf.banos,
+                    "metros": inf.metros,
+                    "tipo": inf.tipo or "Casa",
+                }
+                for inf in inferences
+                if inf.precio and inf.metros
+            ]
+            return data
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[startup] No se pudieron leer datos reales: {e}")
+        return []
+
+
 @app.on_event("startup")
 def startup():
     init_db()
 
     # Si el modelo no existe en disco (nunca se entrenó, o se perdió por un
-    # redeploy en disco efímero), lo entrenamos automáticamente con datos
-    # base para que el servicio nunca quede "roto" esperando una llamada
-    # manual a /train-model.
+    # redeploy en disco efímero), lo entrenamos automáticamente.
     model, scaler = load_model()
     if model is None:
-        print("[startup] No hay modelo entrenado, entrenando con datos base...")
-        train_property_model(BASE_TRAINING_DATA)
-        print("[startup] Modelo base entrenado correctamente.")
+        print("[startup] No hay modelo entrenado, buscando datos reales...")
+        real_data = _load_real_training_data()
+
+        if len(real_data) >= 10:
+            print(f"[startup] Entrenando con {len(real_data)} clasificaciones reales de la BD.")
+            train_property_model(real_data)
+        else:
+            print("[startup] No hay suficientes datos reales, usando datos base.")
+            train_property_model(BASE_TRAINING_DATA)
+
+        print("[startup] Modelo entrenado correctamente.")
 
 
 app.include_router(router, tags=["ML"])

@@ -12,6 +12,7 @@ class HistoryView extends StatefulWidget {
 class _HistoryViewState extends State<HistoryView> {
   List<dynamic> _history = [];
   bool _loading = true;
+  bool _clearing = false;
 
   @override
   void initState() {
@@ -32,6 +33,7 @@ class _HistoryViewState extends State<HistoryView> {
   }
 
   Future<void> _clear() async {
+    final theme = Theme.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -49,10 +51,29 @@ class _HistoryViewState extends State<HistoryView> {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+
+    setState(() => _clearing = true);
+    try {
+      // Esto es lo que faltaba: antes solo se vaciaba la lista en memoria
+      // (setState local) sin avisarle al backend, así que las búsquedas
+      // "borradas" volvían a aparecer la próxima vez que se abría esta
+      // pantalla. Ahora sí se elimina de verdad en el servidor.
+      await DioClient().dio.delete('/history/');
       setState(() {
         _history = [];
+        _clearing = false;
       });
+    } catch (e) {
+      setState(() => _clearing = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No se pudo limpiar el historial, intenta de nuevo'),
+            backgroundColor: theme.colorScheme.error,
+          ),
+        );
+      }
     }
   }
 
@@ -66,8 +87,17 @@ class _HistoryViewState extends State<HistoryView> {
         actions: [
           if (_history.isNotEmpty)
             TextButton(
-              onPressed: _clear,
-              child: Text(
+              onPressed: _clearing ? null : _clear,
+              child: _clearing
+                  ? SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: theme.colorScheme.error,
+                ),
+              )
+                  : Text(
                 'Limpiar',
                 style: theme.textTheme.labelLarge?.copyWith(
                   color: theme.colorScheme.error,
