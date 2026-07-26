@@ -76,6 +76,21 @@ class _PropertyDetailViewState extends State<PropertyDetailView> {
     }
   }
 
+  void _showReportSheet(BuildContext context, ThemeData theme) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _ReportSheet(
+        theme: theme,
+        propertyId: widget.property.id,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -107,6 +122,14 @@ class _PropertyDetailViewState extends State<PropertyDetailView> {
                   theme: theme,
                   icon: Icons.share_outlined,
                   onTap: () {},
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+                child: CircleButton(
+                  theme: theme,
+                  icon: Icons.flag_outlined,
+                  onTap: () => _showReportSheet(context, theme),
                 ),
               ),
             ],
@@ -360,6 +383,21 @@ class _PropertyDetailViewState extends State<PropertyDetailView> {
                     ],
                   ),
 
+                  const SizedBox(height: 16),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () => _showReportSheet(context, theme),
+                      icon: Icon(Icons.flag_outlined,
+                          size: 16, color: theme.colorScheme.outline),
+                      label: Text(
+                        'Reportar esta publicación',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                    ),
+                  ),
+
                   // Espacio para el bottom bar
                   const SizedBox(height: 100),
                 ],
@@ -531,6 +569,144 @@ class _FeatureChip extends StatelessWidget {
   }
 }
 
+class _ReportSheet extends StatefulWidget {
+  final ThemeData theme;
+  final String propertyId;
+  const _ReportSheet({required this.theme, required this.propertyId});
+
+  @override
+  State<_ReportSheet> createState() => _ReportSheetState();
+}
+
+class _ReportSheetState extends State<_ReportSheet> {
+  String? _selectedReason;
+  final _detailsCtrl = TextEditingController();
+  bool _submitting = false;
+
+  final List<Map<String, String>> _reasons = [
+    {"value": "contenido_inapropiado", "label": "Contenido inapropiado"},
+    {"value": "informacion_falsa", "label": "Información falsa o engañosa"},
+    {"value": "precio_sospechoso", "label": "Precio sospechoso / posible fraude"},
+    {"value": "spam", "label": "Publicación duplicada o spam"},
+    {"value": "otro", "label": "Otro motivo"},
+  ];
+
+  @override
+  void dispose() {
+    _detailsCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_selectedReason == null) return;
+    setState(() => _submitting = true);
+    try {
+      await DioClient().dio.post('/reports/', data: {
+        'property_id': widget.propertyId,
+        'reason': _selectedReason,
+        if (_detailsCtrl.text.trim().isNotEmpty) 'details': _detailsCtrl.text.trim(),
+      });
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Gracias, revisaremos esta publicación'),
+            backgroundColor: Theme.of(context).colorScheme.secondary,
+          ),
+        );
+      }
+    } catch (_) {
+      setState(() => _submitting = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No se pudo enviar el reporte, intenta de nuevo'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        left: 20, right: 20, top: 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Icon(Icons.flag_outlined, color: theme.colorScheme.error),
+                const SizedBox(width: 8),
+                Text('Reportar publicación', style: theme.textTheme.titleLarge),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '¿Por qué quieres reportar esta propiedad?',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ..._reasons.map((r) => RadioListTile<String>(
+              contentPadding: EdgeInsets.zero,
+              value: r['value']!,
+              groupValue: _selectedReason,
+              onChanged: (v) => setState(() => _selectedReason = v),
+              title: Text(r['label']!, style: theme.textTheme.bodyMedium),
+            )),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _detailsCtrl,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Detalles adicionales (opcional)',
+                hintText: 'Cuéntanos más...',
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: (_selectedReason == null || _submitting) ? null : _submit,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                  backgroundColor: theme.colorScheme.error,
+                ),
+                child: _submitting
+                    ? SizedBox(
+                  width: 18, height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: theme.colorScheme.onError),
+                )
+                    : const Text('Enviar reporte'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ScheduleSheet extends StatefulWidget {
   final ThemeData theme;
   final String propertyId;
@@ -557,7 +733,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
 
   final List<DateTime> _availableDates = List.generate(
     14,
-    (i) => DateTime.now().add(Duration(days: i + 1)),
+        (i) => DateTime.now().add(Duration(days: i + 1)),
   );
 
   Future<void> _loadSlots(DateTime date) async {
@@ -618,8 +794,8 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
                 final label = t == 'presencial'
                     ? 'Presencial'
                     : t == 'virtual'
-                        ? 'Virtual'
-                        : 'Telefónica';
+                    ? 'Virtual'
+                    : 'Telefónica';
                 return Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(
@@ -641,13 +817,13 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
                           ),
                         ),
                         child: Text(label,
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: sel
-                                ? theme.colorScheme.onPrimaryContainer
-                                : theme.colorScheme.onSurfaceVariant,
-                            fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
-                          )),
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: sel
+                                  ? theme.colorScheme.onPrimaryContainer
+                                  : theme.colorScheme.onSurfaceVariant,
+                              fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
+                            )),
                       ),
                     ),
                   ),
@@ -814,18 +990,18 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
             const SizedBox(height: 24),
             FilledButton(
               onPressed: (_selectedDate == null ||
-                      _selectedSlot == null ||
-                      _loading)
+                  _selectedSlot == null ||
+                  _loading)
                   ? null
                   : () => _submit(context),
               child: _loading
                   ? SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: theme.colorScheme.onPrimary,
-                      ),
-                    )
+                width: 20, height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: theme.colorScheme.onPrimary,
+                ),
+              )
                   : const Text('Confirmar cita'),
             ),
           ],

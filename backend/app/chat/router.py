@@ -4,6 +4,7 @@ from app.infrastructure.database.database import get_db
 from app.infrastructure.database.models import User, Conversation, Message, Property
 from app.infrastructure.security.dependencies import get_current_user
 from app.fcm.router import notify_message
+from app.moderation import get_first_bad_word
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -61,7 +62,7 @@ def get_conversations(
             Message.sender_id != current_user.id,
             Message.is_read == False
         ).count()
-        
+
         prop_title = None
         prop_photo = None
         if conv.property_id:
@@ -129,7 +130,7 @@ def start_conversation(
     db.add(conv)
     db.commit()
     db.refresh(conv)
-    
+
     prop_title = None
     prop_photo = None
     if conv.property_id:
@@ -182,6 +183,13 @@ def send_message(
     ).first()
     if not conv:
         raise HTTPException(status_code=404, detail="Conversación no encontrada")
+
+    bad_word = get_first_bad_word(data.content)
+    if bad_word:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tu mensaje contiene lenguaje inapropiado ('{bad_word}')",
+        )
 
     msg = Message(
         id=str(uuid.uuid4()),

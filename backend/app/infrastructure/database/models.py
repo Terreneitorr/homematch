@@ -149,3 +149,14 @@ class FCMToken(Base):
     device = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+
+class Report(Base):
+    __tablename__ = "reports"
+    id = Column(String, primary_key=True)
+    property_id = Column(String, ForeignKey("properties.id"))
+    reporter_id = Column(String, ForeignKey("users.id"))
+    reason = Column(String)
+    details = Column(Text, nullable=True)
+    status = Column(String, default="pending")  # pending, reviewed, dismissed
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

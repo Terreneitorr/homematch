@@ -19,6 +19,7 @@ from app.chat.router import router as chat_router
 from app.payments.router import router as payments_router
 from app.profile.router import router as profile_router
 from app.fcm.router import router as fcm_router
+from app.reports.router import router as reports_router
 
 # Firebase
 from app.infrastructure.fcm_service import init_firebase
@@ -54,6 +55,7 @@ app.include_router(chat_router, prefix="/chat", tags=["Chat"])
 app.include_router(payments_router, prefix="/payments", tags=["Payments"])
 app.include_router(profile_router, prefix="/profile", tags=["Profile"])
 app.include_router(fcm_router, prefix="/fcm", tags=["FCM"])
+app.include_router(reports_router, prefix="/reports", tags=["Reports"])
 
 @app.post("/v2/encrypt")
 async def encrypt_data(request: Request):
