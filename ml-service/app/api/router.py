@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 from app.database import get_db, Inference
 from app.model.classifier import (
     classify_property, train_property_model,
@@ -13,6 +12,12 @@ import uuid
 import os
 
 router = APIRouter()
+
+# Si alguien manda un body personalizado a /train-model con menos muestras
+# que esto, lo ignoramos y usamos la base de datos real en su lugar. Esto
+# evita que una prueba manual en Swagger con 2-3 propiedades de juguete
+# sobreescriba el modelo bueno entrenado con miles de clasificaciones reales.
+MIN_SAMPLES_FOR_CUSTOM_DATA = 10
 
 
 class PropertyInput(BaseModel):
@@ -66,7 +71,6 @@ def classify(data: PropertyInput, db: Session = Depends(get_db)):
         tipo=data.tipo,
     )
 
-    # Guardar inferencia
     inference = Inference(
         id=data.property_id or str(uuid.uuid4()),
         precio=data.precio,
@@ -91,10 +95,13 @@ def train(request: TrainPropertyRequest, db: Session = Depends(get_db)):
     data = []
     source = "base_data"
 
-    if request.data and len(request.data) > 0:
+    if request.data and len(request.data) >= MIN_SAMPLES_FOR_CUSTOM_DATA:
         data = [sample.model_dump() for sample in request.data]
         source = "request"
     else:
+        # Si mandaron datos personalizados pero con muy pocas muestras,
+        # los ignoramos a propósito (no sobreescribir el modelo bueno con
+        # una prueba de 2-3 propiedades) y seguimos con la BD real.
         try:
             inferences = db.query(Inference).all()
             if inferences:
