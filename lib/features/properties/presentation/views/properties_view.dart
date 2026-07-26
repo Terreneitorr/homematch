@@ -337,7 +337,7 @@ class _PropertiesViewState extends State<PropertiesView> {
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 0.7,
+            childAspectRatio: 0.62,
           ),
           itemCount: filtered.length,
           itemBuilder: (_, i) {

@@ -51,7 +51,7 @@ class FavoritesView extends StatelessWidget {
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 0.7,
+          childAspectRatio: 0.62,
         ),
         itemCount: favVM.favoriteProperties.length,
         itemBuilder: (_, i) {

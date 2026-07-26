@@ -13,6 +13,21 @@ descripción de propiedades, y mensajes de chat.
 
 import unicodedata
 
+# Mapeo de "leetspeak" — números/símbolos que la gente usa para reemplazar
+# letras y evadir el filtro (ej. "3stupyd4" en vez de "estupida"). También
+# incluye 'y' -> 'i', porque es un cambio fonético muy común en insultos
+# en español ("estupyda" en vez de "estupida").
+_LEET_MAP = str.maketrans({
+    "0": "o", "1": "i", "3": "e", "4": "a", "5": "s",
+    "7": "t", "8": "b", "@": "a", "$": "s", "!": "i",
+    "y": "i",
+})
+
+# Caracteres que se insertan a propósito en medio de una palabra para
+# partirla (ej. "pi-nche" en vez de "pinche"). Se quitan ANTES de separar
+# por espacios, así "pi-nche" se vuelve una sola palabra: "pinche".
+_EVASION_CHARS = str.maketrans("", "", "-_.*")
+
 # Lista base — amplíala según lo que necesites cubrir. Están en minúsculas
 # y sin acentos porque _normalize() les hace lo mismo al texto de entrada
 # antes de compararlas.
@@ -32,6 +47,7 @@ BANNED_WORDS = {
     "gonorrea",
     "cretino", "cretina",
     "imbecilidad",
+    "pinche", "pinches",
 
     # --- Lenguaje vulgar / sexual ---
     "verga", "vergas", "vergazo",
@@ -61,10 +77,13 @@ BANNED_WORDS = {
 
 
 def _normalize(text: str) -> str:
-    """minúsculas + sin acentos, igual que en la búsqueda semántica."""
+    """minúsculas + sin acentos + sin trucos de leetspeak/separadores."""
     text = text.lower().strip()
     text = unicodedata.normalize("NFKD", text)
-    return "".join(c for c in text if not unicodedata.combining(c))
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    text = text.translate(_EVASION_CHARS)  # quita guiones/puntos usados para partir palabras
+    text = text.translate(_LEET_MAP)  # normaliza números/símbolos a letras
+    return text
 
 
 def contains_inappropriate_language(text: str) -> bool:
