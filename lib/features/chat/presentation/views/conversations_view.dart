@@ -37,6 +37,45 @@ class _ConversationsViewState extends State<ConversationsView> {
     }
   }
 
+  Future<bool> _confirmDelete(String conversationId) async {
+    final theme = Theme.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar conversación'),
+        content: const Text(
+            '¿Eliminar toda la conversación? Se borrará para ambos y no se puede deshacer.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: theme.colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return false;
+
+    try {
+      await DioClient().dio.delete('/chat/conversations/$conversationId');
+      return true;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No se pudo eliminar la conversación'),
+            backgroundColor: theme.colorScheme.error,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -100,133 +139,149 @@ class _ConversationsViewState extends State<ConversationsView> {
                   DateTime.parse(conv['last_message_at']);
             } catch (_) {}
 
-            return ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 8),
-              leading: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor:
-                    theme.colorScheme.primaryContainer,
-                    child: const Icon(
-                      Icons.person,
-                      size: 32,
-                    ),
-                  ),
-                  if (propPhoto != null)
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: theme.colorScheme.surface, width: 2),
-                          shape: BoxShape.circle,
-                          image: DecorationImage(
-                            image: CachedNetworkImageProvider(upload.UploadService.getFullUrl(propPhoto)),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          otherLabel,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: unread > 0
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                        if (propTitle != null)
-                          Text(
-                            propTitle,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (lastMsgTime != null)
-                    Text(
-                      _formatTime(lastMsgTime),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: unread > 0
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.outline,
-                        fontWeight: unread > 0
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                    ),
-                ],
-              ),
-              subtitle: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      conv['last_message'] ??
-                          'Inicia la conversación',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: unread > 0
-                            ? theme.colorScheme.onSurface
-                            : theme.colorScheme.outline,
-                        fontWeight: unread > 0
-                            ? FontWeight.w500
-                            : FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                  if (unread > 0)
-                    Container(
-                      margin: const EdgeInsets.only(left: 8),
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '$unread',
-                          style: TextStyle(
-                            color: theme.colorScheme.onPrimary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              onTap: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ChatView(
-                      conversationId: conv['id'],
-                      otherUserLabel: otherLabel,
-                      propertyTitle: propTitle,
-                    ),
-                  ),
-                );
-                _load();
+            return Dismissible(
+              key: ValueKey(conv['id']),
+              direction: DismissDirection.endToStart,
+              confirmDismiss: (_) => _confirmDelete(conv['id']),
+              onDismissed: (_) {
+                setState(() {
+                  _conversations.removeWhere((c) => c['id'] == conv['id']);
+                });
               },
+              background: Container(
+                color: theme.colorScheme.error,
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Icon(Icons.delete_outline, color: theme.colorScheme.onError),
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 8),
+                leading: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor:
+                      theme.colorScheme.primaryContainer,
+                      child: const Icon(
+                        Icons.person,
+                        size: 32,
+                      ),
+                    ),
+                    if (propPhoto != null)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: theme.colorScheme.surface, width: 2),
+                            shape: BoxShape.circle,
+                            image: DecorationImage(
+                              image: CachedNetworkImageProvider(upload.UploadService.getFullUrl(propPhoto)),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            otherLabel,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: unread > 0
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          if (propTitle != null)
+                            Text(
+                              propTitle,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (lastMsgTime != null)
+                      Text(
+                        _formatTime(lastMsgTime),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: unread > 0
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outline,
+                          fontWeight: unread > 0
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                  ],
+                ),
+                subtitle: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        conv['last_message'] ??
+                            'Inicia la conversación',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: unread > 0
+                              ? theme.colorScheme.onSurface
+                              : theme.colorScheme.outline,
+                          fontWeight: unread > 0
+                              ? FontWeight.w500
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                    if (unread > 0)
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$unread',
+                            style: TextStyle(
+                              color: theme.colorScheme.onPrimary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChatView(
+                        conversationId: conv['id'],
+                        otherUserLabel: otherLabel,
+                        propertyTitle: propTitle,
+                      ),
+                    ),
+                  );
+                  _load();
+                },
+              ),
             );
           },
         ),

@@ -140,6 +140,8 @@ class Message(Base):
     content = Column(Text)
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    reply_to_id = Column(String, nullable=True)
+    deleted = Column(Boolean, default=False)
 
 class FCMToken(Base):
     __tablename__ = "fcm_tokens"

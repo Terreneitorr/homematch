@@ -12,6 +12,7 @@ import uuid
 
 class MessageCreate(BaseModel):
     content: str
+    reply_to_id: Optional[str] = None
 
 class MessageResponse(BaseModel):
     id: str
@@ -20,6 +21,10 @@ class MessageResponse(BaseModel):
     content: str
     is_read: bool
     created_at: datetime
+    deleted: bool = False
+    reply_to_id: Optional[str] = None
+    reply_to_content: Optional[str] = None
+    reply_to_sender_id: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -40,6 +45,32 @@ class ConversationResponse(BaseModel):
         from_attributes = True
 
 router = APIRouter()
+
+
+def _to_message_response(db: Session, msg: Message) -> MessageResponse:
+    """Arma la respuesta de un mensaje, incluyendo la vista previa del
+    mensaje al que responde (si aplica)."""
+    reply_content = None
+    reply_sender_id = None
+    if msg.reply_to_id:
+        original = db.query(Message).filter(Message.id == msg.reply_to_id).first()
+        if original:
+            reply_content = "Mensaje eliminado" if original.deleted else original.content
+            reply_sender_id = original.sender_id
+
+    return MessageResponse(
+        id=msg.id,
+        conversation_id=msg.conversation_id,
+        sender_id=msg.sender_id,
+        content="Mensaje eliminado" if msg.deleted else msg.content,
+        is_read=msg.is_read,
+        created_at=msg.created_at,
+        deleted=msg.deleted or False,
+        reply_to_id=msg.reply_to_id,
+        reply_to_content=reply_content,
+        reply_to_sender_id=reply_sender_id,
+    )
+
 
 @router.get("/conversations", response_model=List[ConversationResponse])
 def get_conversations(
@@ -72,6 +103,10 @@ def get_conversations(
                 if prop.photos:
                     prop_photo = prop.photos[0]
 
+        last_msg_preview = None
+        if last_msg:
+            last_msg_preview = "Mensaje eliminado" if last_msg.deleted else last_msg.content
+
         result.append(ConversationResponse(
             id=conv.id,
             user_id=conv.user_id,
@@ -81,7 +116,7 @@ def get_conversations(
             property_photo=prop_photo,
             created_at=conv.created_at,
             last_message_at=conv.last_message_at,
-            last_message=last_msg.content if last_msg else None,
+            last_message=last_msg_preview,
             unread_count=unread,
         ))
     return result
@@ -93,7 +128,6 @@ def start_conversation(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    # Verificar si ya existe
     existing = db.query(Conversation).filter(
         Conversation.user_id == current_user.id,
         Conversation.seller_id == seller_id,
@@ -158,7 +192,6 @@ def get_messages(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    # Marcar como leídos
     db.query(Message).filter(
         Message.conversation_id == conversation_id,
         Message.sender_id != current_user.id,
@@ -166,9 +199,11 @@ def get_messages(
     ).update({"is_read": True})
     db.commit()
 
-    return db.query(Message).filter(
+    messages = db.query(Message).filter(
         Message.conversation_id == conversation_id
     ).order_by(Message.created_at.asc()).all()
+
+    return [_to_message_response(db, m) for m in messages]
 
 @router.post("/conversations/{conversation_id}/messages",
              response_model=MessageResponse)
@@ -191,18 +226,26 @@ def send_message(
             detail=f"Tu mensaje contiene lenguaje inapropiado ('{bad_word}')",
         )
 
+    if data.reply_to_id:
+        original = db.query(Message).filter(
+            Message.id == data.reply_to_id,
+            Message.conversation_id == conversation_id,
+            ).first()
+        if not original:
+            raise HTTPException(status_code=404, detail="Mensaje original no encontrado")
+
     msg = Message(
         id=str(uuid.uuid4()),
         conversation_id=conversation_id,
         sender_id=current_user.id,
         content=data.content,
+        reply_to_id=data.reply_to_id,
     )
     db.add(msg)
     conv.last_message_at = datetime.utcnow()
     db.commit()
     db.refresh(msg)
 
-    # Notificar al receptor
     receiver_id = (
         conv.seller_id
         if current_user.id == conv.user_id
@@ -216,4 +259,43 @@ def send_message(
         conversation_id=conversation_id,
     )
 
-    return msg
+    return _to_message_response(db, msg)
+
+
+@router.delete("/conversations/{conversation_id}/messages/{message_id}")
+def delete_message(
+        conversation_id: str,
+        message_id: str,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    msg = db.query(Message).filter(
+        Message.id == message_id,
+        Message.conversation_id == conversation_id,
+        ).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Mensaje no encontrado")
+    if msg.sender_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Solo puedes borrar tus propios mensajes")
+
+    msg.deleted = True
+    db.commit()
+    return {"message": "Mensaje eliminado para todos"}
+
+
+@router.delete("/conversations/{conversation_id}")
+def delete_conversation(
+        conversation_id: str,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+    if current_user.id not in (conv.user_id, conv.seller_id):
+        raise HTTPException(status_code=403, detail="Sin permiso")
+
+    db.query(Message).filter(Message.conversation_id == conversation_id).delete()
+    db.delete(conv)
+    db.commit()
+    return {"message": "Conversación eliminada"}
