@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 class InactivityManager extends ChangeNotifier {
-  static const Duration _timeout = Duration(seconds: 30);
+  static const Duration _timeout = Duration(minutes: 20);
 
 
   Timer? _timer;
