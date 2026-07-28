@@ -80,7 +80,7 @@ class _CreatePropertyViewState extends State<CreatePropertyView> {
       // Subir fotos
       final List<String> uploadedUrls = [];
       for (final img in _selectedImages) {
-        final url = await _uploadService.uploadImage(
+        final url =   await _uploadService.uploadImage(
           img,
           context: 'property',
         );
@@ -125,9 +125,10 @@ class _CreatePropertyViewState extends State<CreatePropertyView> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
+        final msg = e.toString().replaceFirst('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text(msg),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

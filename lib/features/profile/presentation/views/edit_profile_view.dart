@@ -68,12 +68,13 @@ class _EditProfileViewState extends State<EditProfileView> {
         );
         Navigator.pop(context);
       }
-    } catch (_) {
+    } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
+        final msg = e.toString().replaceFirst('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Error al actualizar perfil'),
+            content: Text(msg.isNotEmpty ? msg : 'Error al actualizar perfil'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

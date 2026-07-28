@@ -1,11 +1,13 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:homematch_ai/core/network/dio_client.dart';
 import 'package:homematch_ai/core/network/upload_service.dart' as upload;
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:homematch_ai/features/properties/domain/entities/property_entity.dart';
 import 'package:homematch_ai/features/chat/presentation/views/chat_view.dart';
+import 'package:homematch_ai/features/auth/presentation/viewmodels/auth_viewmodel.dart';
 
 class PropertyDetailView extends StatefulWidget {
   final PropertyEntity property;
@@ -91,6 +93,51 @@ class _PropertyDetailViewState extends State<PropertyDetailView> {
     );
   }
 
+  Future<void> _deleteProperty(BuildContext context, ThemeData theme) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar publicación'),
+        content: const Text(
+            '¿Eliminar esta propiedad? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: theme.colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await DioClient().dio.delete('/properties/${widget.property.id}');
+      if (context.mounted) {
+        Navigator.pop(context, true); // true avisa a quien llamó que se borró
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Propiedad eliminada'),
+            backgroundColor: theme.colorScheme.secondary,
+          ),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No se pudo eliminar la propiedad'),
+            backgroundColor: theme.colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -98,6 +145,8 @@ class _PropertyDetailViewState extends State<PropertyDetailView> {
     final price = isRent
         ? '${_formatPrice(widget.property.price)}/mes'
         : _formatPrice(widget.property.price);
+    final currentUserId = context.watch<AuthViewModel>().user?.id;
+    final isOwner = currentUserId != null && currentUserId == widget.property.ownerId;
 
     return Scaffold(
       body: CustomScrollView(
@@ -124,14 +173,24 @@ class _PropertyDetailViewState extends State<PropertyDetailView> {
                   onTap: () {},
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
-                child: CircleButton(
-                  theme: theme,
-                  icon: Icons.flag_outlined,
-                  onTap: () => _showReportSheet(context, theme),
+              if (isOwner)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+                  child: CircleButton(
+                    theme: theme,
+                    icon: Icons.delete_outline,
+                    onTap: () => _deleteProperty(context, theme),
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+                  child: CircleButton(
+                    theme: theme,
+                    icon: Icons.flag_outlined,
+                    onTap: () => _showReportSheet(context, theme),
+                  ),
                 ),
-              ),
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
@@ -384,19 +443,20 @@ class _PropertyDetailViewState extends State<PropertyDetailView> {
                   ),
 
                   const SizedBox(height: 16),
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: () => _showReportSheet(context, theme),
-                      icon: Icon(Icons.flag_outlined,
-                          size: 16, color: theme.colorScheme.outline),
-                      label: Text(
-                        'Reportar esta publicación',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.outline,
+                  if (!isOwner)
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: () => _showReportSheet(context, theme),
+                        icon: Icon(Icons.flag_outlined,
+                            size: 16, color: theme.colorScheme.outline),
+                        label: Text(
+                          'Reportar esta publicación',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.outline,
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
                   // Espacio para el bottom bar
                   const SizedBox(height: 100),
@@ -407,8 +467,10 @@ class _PropertyDetailViewState extends State<PropertyDetailView> {
         ],
       ),
 
-      // Bottom bar
-      bottomNavigationBar: Container(
+      // Bottom bar (solo para quien no es el dueño)
+      bottomNavigationBar: isOwner
+          ? null
+          : Container(
         padding: EdgeInsets.only(
           left: 20,
           right: 20,
