@@ -27,17 +27,18 @@ VISION_URL = "https://vision.googleapis.com/v1/images:annotate"
 # POSSIBLE (que es bastante común en fotos inocentes, ej. una alberca).
 UNSAFE_LEVELS = {"LIKELY", "VERY_LIKELY"}
 
-# Palabras esperadas en una foto de propiedad real, para el contexto
-# "property". Si Vision no detecta NINGUNA de estas etiquetas, avisamos
-# que la imagen no parece ser de una propiedad (advertencia suave, no
-# bloqueo agresivo, porque las etiquetas de Vision son en inglés y
-# genéricas, y una foto legítima pero muy cerrada podría no matchear).
+# Palabras FUERTES esperadas en una foto de propiedad real. Se quitaron a
+# propósito palabras genéricas como "wall", "floor", "door", "window",
+# "ceiling" porque aparecen en casi cualquier foto tomada en interiores
+# (incluida una selfie con una pared de fondo), lo que dejaba pasar
+# prácticamente cualquier imagen. Ahora solo se aceptan etiquetas que
+# realmente indican una propiedad/vivienda.
 PROPERTY_HINT_LABELS = {
-    "house", "home", "building", "room", "apartment", "real estate",
-    "property", "interior design", "furniture", "kitchen", "bedroom",
-    "bathroom", "living room", "garden", "yard", "roof", "facade",
-    "door", "window", "floor", "ceiling", "wall", "architecture",
-    "residential area", "estate", "cottage", "villa", "condominium",
+    "house", "home", "building", "apartment", "real estate",
+    "property", "residential area", "estate", "cottage", "villa",
+    "condominium", "living room", "bedroom", "kitchen", "bathroom",
+    "facade", "roof", "yard", "garden", "interior design",
+    "architecture", "room", "furniture",
 }
 
 
@@ -76,11 +77,13 @@ async def check_image_safety(content: bytes) -> Optional[str]:
             content, [{"type": "SAFE_SEARCH_DETECTION"}]
         )
         annotation = result.get("safeSearchAnnotation", {})
+        print(f"[vision-safesearch] resultado: {annotation}")
         for category in ("adult", "violence", "racy"):
             if annotation.get(category) in UNSAFE_LEVELS:
                 return category
         return None
-    except Exception:
+    except Exception as e:
+        print(f"[vision-safesearch] error llamando a Vision: {e}")
         return None
 
 
@@ -102,8 +105,12 @@ async def check_looks_like_property(content: bytes) -> bool:
             label["description"].lower()
             for label in result.get("labelAnnotations", [])
         }
+        # Log temporal para diagnosticar en Railway qué etiquetas detecta
+        # Vision realmente. Se puede quitar una vez confirmado que funciona bien.
+        print(f"[vision-labels] detectadas: {labels}")
         return bool(labels & PROPERTY_HINT_LABELS)
-    except Exception:
+    except Exception as e:
+        print(f"[vision-labels] error llamando a Vision: {e}")
         return True
 
 
