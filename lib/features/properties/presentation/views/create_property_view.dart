@@ -80,8 +80,14 @@ class _CreatePropertyViewState extends State<CreatePropertyView> {
       // Subir fotos
       final List<String> uploadedUrls = [];
       for (final img in _selectedImages) {
-        final url = await _uploadService.uploadImage(img);
-        if (url != null) uploadedUrls.add(url);
+        final url = await _uploadService.uploadImage(
+          img,
+          context: 'property',
+        );
+
+        if (url != null) {
+          uploadedUrls.add(url);
+        }
       }
 
       final vm = context.read<PropertyViewModel>();
