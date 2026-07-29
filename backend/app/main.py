@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from app.infrastructure.database.database import Base, engine, get_db
 from app.infrastructure.encryption import encryption
 
@@ -57,15 +58,24 @@ app.include_router(profile_router, prefix="/profile", tags=["Profile"])
 app.include_router(fcm_router, prefix="/fcm", tags=["FCM"])
 app.include_router(reports_router, prefix="/reports", tags=["Reports"])
 
+
+class EncryptRequest(BaseModel):
+    data: str
+
+
+class DecryptRequest(BaseModel):
+    encrypted: str
+
+
 @app.post("/v2/encrypt")
-async def encrypt_data(request: Request):
-    body = await request.json()
-    return {"encrypted": encryption.encrypt(body.get("data", ""))}
+async def encrypt_data(payload: EncryptRequest):
+    return {"encrypted": encryption.encrypt(payload.data)}
+
 
 @app.post("/v2/decrypt")
-async def decrypt_data(request: Request):
-    body = await request.json()
-    return {"data": encryption.decrypt(body.get("encrypted", ""))}
+async def decrypt_data(payload: DecryptRequest):
+    return {"data": encryption.decrypt(payload.encrypted)}
+
 
 @app.get("/")
 def root():

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:device_preview/device_preview.dart';
 import 'core/theme/app_theme.dart';
 import 'core/security/fcm_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -39,11 +41,11 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  
+
   // Stripe
   Stripe.publishableKey = 'pk_test_51Tv9XaAnoJRpC7akHvx4cQxODsfFYok7xVBoqdI0LPb3nHr0bZFVhhDgpc073zvYBpuOmg0UJ9tjU3pdx7fYq0EQ00NreRQ3Tu';
   await Stripe.instance.applySettings();
-  
+
   // Inicializar FCM
   final fcmService = FcmService();
   await fcmService.initialize();
@@ -62,11 +64,21 @@ void main() async {
       statusBarIconBrightness: Brightness.dark,
     ),
   );
-  
+
   // Registrar handler de background ANTES de runApp
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  runApp(const HomeMatchApp());
+  // DevicePreview envuelve toda la app para poder simular distintos
+  // dispositivos (tamaños de pantalla, densidades) sin tener el hardware
+  // físico. Se desactiva automáticamente en el build de release, así que
+  // nunca lo ven los usuarios reales en Play Store, solo aparece en
+  // debug/profile durante el desarrollo y la revisión técnica.
+  runApp(
+    DevicePreview(
+      enabled: !kReleaseMode,
+      builder: (context) => const HomeMatchApp(),
+    ),
+  );
 }
 
 class HomeMatchApp extends StatelessWidget {
@@ -137,17 +149,25 @@ class HomeMatchApp extends StatelessWidget {
             theme: materialTheme.light(),
             darkTheme: materialTheme.dark(),
             themeMode: ThemeMode.light,
+            // Requeridos por DevicePreview para simular MediaQuery/locale
+            // del dispositivo elegido en el panel de simulación.
+            useInheritedMediaQuery: true,
+            locale: DevicePreview.locale(context),
             builder: (context, child) {
               // El envoltorio de seguridad debe estar dentro de MaterialApp.builder
               // para tener acceso al contexto de Material (temas, etc.)
               // y para superponerse a toda la navegación.
-              return SecurityCheckWrapper(
+              final securedChild = SecurityCheckWrapper(
                 child: InactivityDetector(
                   child: SessionGuard(
                     child: child!,
                   ),
                 ),
               );
+              // DevicePreview.appBuilder envuelve nuestro árbol ya armado,
+              // para que el marco de simulación del dispositivo se dibuje
+              // alrededor de toda la app (seguridad incluida).
+              return DevicePreview.appBuilder(context, securedChild);
             },
             home: _getHome(authVM),
           );
