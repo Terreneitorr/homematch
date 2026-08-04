@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'firebase_options.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -40,7 +41,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // Stripe
   Stripe.publishableKey = 'pk_test_51Tv9XaAnoJRpC7akHvx4cQxODsfFYok7xVBoqdI0LPb3nHr0bZFVhhDgpc073zvYBpuOmg0UJ9tjU3pdx7fYq0EQ00NreRQ3Tu';
