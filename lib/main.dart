@@ -41,26 +41,33 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Stripe
-  Stripe.publishableKey = 'pk_test_51Tv9XaAnoJRpC7akHvx4cQxODsfFYok7xVBoqdI0LPb3nHr0bZFVhhDgpc073zvYBpuOmg0UJ9tjU3pdx7fYq0EQ00NreRQ3Tu';
-  await Stripe.instance.applySettings();
+  if (!kIsWeb) {
+    // Stripe
+    Stripe.publishableKey = '...';
+    await Stripe.instance.applySettings();
 
-  // Inicializar FCM
-  final fcmService = FcmService();
-  await fcmService.initialize();
+    // FCM
+    final fcmService = FcmService();
+    await fcmService.initialize();
 
-  // Escuchar el evento de Wipe Remoto de forma global
-  FcmService.onWipeStream.listen((triggered) {
-    if (triggered) {
-      navigatorKey.currentState?.pushNamedAndRemoveUntil('/', (route) => false);
-    }
-  });
+    FcmService.onWipeStream.listen((triggered) {
+      if (triggered) {
+        navigatorKey.currentState?.pushNamedAndRemoveUntil('/', (route) => false);
+      }
+    });
+
+    FirebaseMessaging.onBackgroundMessage(
+      firebaseMessagingBackgroundHandler,
+    );
+  }
 
   await initializeDateFormatting('es', null);
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -68,14 +75,6 @@ void main() async {
     ),
   );
 
-  // Registrar handler de background ANTES de runApp
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-  // DevicePreview envuelve toda la app para poder simular distintos
-  // dispositivos (tamaños de pantalla, densidades) sin tener el hardware
-  // físico. Se desactiva automáticamente en el build de release, así que
-  // nunca lo ven los usuarios reales en Play Store, solo aparece en
-  // debug/profile durante el desarrollo y la revisión técnica.
   runApp(
     DevicePreview(
       enabled: !kReleaseMode,
