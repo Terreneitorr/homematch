@@ -19,7 +19,7 @@ import 'features/auth/data/datasources/auth_remote_datasource.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/domain/usecases/login_with_google_usecase.dart';
 import 'features/auth/domain/usecases/logout_usecase.dart';
-import 'features/auth/presentation/viewmodels/auth_viewmodel.dart';
+import 'features/auth/presentation/viewmodels/auth_viewmodel.dart'; 
 import 'features/auth/presentation/views/login_view.dart';
 import 'features/auth/presentation/views/main_navigation_view.dart';
 import 'features/auth/presentation/views/splash_view.dart';
