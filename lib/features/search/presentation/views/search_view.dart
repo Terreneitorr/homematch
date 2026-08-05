@@ -181,8 +181,8 @@ class _SearchViewState extends State<SearchView> {
             ) : GridView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               gridDelegate:
-              const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 200,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
                 childAspectRatio: 0.62,

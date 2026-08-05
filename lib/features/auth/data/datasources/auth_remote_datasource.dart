@@ -2,6 +2,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/network/dio_client.dart';
 import '../models/user_model.dart';
+import 'package:flutter/foundation.dart';
 
 abstract class AuthRemoteDataSource {
   Future<UserModel> loginWithGoogle({String role});
@@ -17,6 +18,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     serverClientId: '578896202911-4fhr5j0fffmkgeh9kcqng1b6gug125jl.apps.googleusercontent.com',
+    clientId: kIsWeb ? '578896202911-5b6qomkqo72eg1vdh472gbkns03rpfp1.apps.googleusercontent.com' : null,
     scopes: ['email', 'profile'],
   );
 

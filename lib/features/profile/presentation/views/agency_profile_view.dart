@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/theme/theme_selector_sheet.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 
 class AgencyProfileView extends StatefulWidget {
@@ -326,6 +327,40 @@ class _AgencyProfileViewState extends State<AgencyProfileView> {
                             ),
                           ],
                         ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Apariencia
+                    Text('Apariencia', style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () => showThemeSelectorSheet(context),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerLowest,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: theme.colorScheme.outlineVariant),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.dark_mode_outlined,
+                                size: 20, color: theme.colorScheme.primary),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Tema de la aplicación',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ),
+                            Icon(Icons.chevron_right,
+                                color: theme.colorScheme.outline),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),

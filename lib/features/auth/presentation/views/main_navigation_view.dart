@@ -28,6 +28,7 @@ import 'package:homematch_ai/core/network/upload_service.dart' as upload;
 import 'package:homematch_ai/core/security/fcm_security_service.dart';
 import 'package:homematch_ai/features/profile/presentation/views/verification_document_view.dart';
 import 'package:homematch_ai/core/security/inactivity_manager.dart';
+import 'package:homematch_ai/core/theme/theme_selector_sheet.dart';
 
 class MainNavigationView extends StatefulWidget {
   const MainNavigationView({super.key});
@@ -47,18 +48,12 @@ class MainNavigationViewState extends State<MainNavigationView> {
   void initState() {
     super.initState();
 
-    // Cualquiera que haya sido el estado del timer de inactividad antes
-    // (venir de un logout manual, del pago, o de una sesión anterior que
-    // expiró), al entrar de verdad a la app se reinicia limpio. Sin esto,
-    // un timer que se cumple de fondo durante el login puede dejar
-    // "sessionExpired" en true y el diálogo aparece apenas entras.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         context.read<InactivityManager>().resetSession();
       }
     });
 
-    // Inicializar FCM con el context
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FcmSecurityService.initialize(context);
     });
@@ -68,15 +63,10 @@ class MainNavigationViewState extends State<MainNavigationView> {
 
       final authVM = context.read<AuthViewModel>();
 
-      // Si el usuario está vacío, hacer logout y regresar al login
       if (authVM.user == null || authVM.user!.id.isEmpty) {
         await authVM.logout();
         return;
       }
-
-      // ELIMINADO: propVM.loadProperties() y favVM.loadFavorites()
-      // Razón: PropertiesView ya se encarga de cargar sus propios datos al iniciar,
-      // llamar esto aquí duplica la carga y ralentiza el inicio.
     });
   }
 
@@ -395,7 +385,6 @@ class _AgencyDashboardState extends State<_AgencyDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Stats grid
               Text('Estadísticas', style: theme.textTheme.titleMedium),
               const SizedBox(height: 12),
               GridView.count(
@@ -438,7 +427,6 @@ class _AgencyDashboardState extends State<_AgencyDashboard> {
               ),
               const SizedBox(height: 24),
 
-              // Mis propiedades recientes
               if (_recentProperties.isNotEmpty) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -462,7 +450,6 @@ class _AgencyDashboardState extends State<_AgencyDashboard> {
                 const SizedBox(height: 16),
               ],
 
-              // Acciones rápidas
               Text('Acciones rápidas', style: theme.textTheme.titleMedium),
               const SizedBox(height: 12),
               _ActionTile(
@@ -719,8 +706,6 @@ class _AdminPanelState extends State<_AdminPanel>
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _load();
-    // Auto-refresh de las estadísticas cada 60 segundos, sin que el admin
-    // tenga que jalar hacia abajo o darle a refrescar manualmente.
     _autoRefreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       if (mounted) _load();
     });
@@ -954,7 +939,6 @@ class _AdminPanelState extends State<_AdminPanel>
           color: theme.colorScheme.primary))
           : Column(
         children: [
-          // Buscador
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: TextField(
@@ -978,16 +962,9 @@ class _AdminPanelState extends State<_AdminPanel>
             child: TabBarView(
               controller: _tabController,
               children: [
-                // ── STATS ──
                 _buildStats(theme),
-
-                // ── ACTIVOS ──
                 _buildUserList(theme, _activeUsers, true),
-
-                // ── INACTIVOS ──
                 _buildUserList(theme, _inactiveUsers, false),
-
-                // ── VERIFICACIONES ──
                 _buildVerifications(theme),
               ],
             ),
@@ -1003,7 +980,6 @@ class _AdminPanelState extends State<_AdminPanel>
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Resumen general
           Row(
             children: [
               _StatCard(
@@ -1045,7 +1021,6 @@ class _AdminPanelState extends State<_AdminPanel>
           ),
           const SizedBox(height: 24),
 
-          // Distribución por rol
           Text('Distribución por rol',
               style: theme.textTheme.titleMedium),
           const SizedBox(height: 12),
@@ -1092,7 +1067,6 @@ class _AdminPanelState extends State<_AdminPanel>
 
           const SizedBox(height: 24),
 
-          // Publicaciones totales + quién publica más
           Text('Publicaciones', style: theme.textTheme.titleMedium),
           const SizedBox(height: 12),
           _StatCard(
@@ -1130,7 +1104,6 @@ class _AdminPanelState extends State<_AdminPanel>
             const SizedBox(height: 24),
           ],
 
-          // Gráfica de actividad de los últimos 7 días
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1198,7 +1171,6 @@ class _AdminPanelState extends State<_AdminPanel>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
                 Row(
                   children: [
                     CircleAvatar(
@@ -1240,7 +1212,6 @@ class _AdminPanelState extends State<_AdminPanel>
                         ],
                       ),
                     ),
-                    // Badge de rol
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
@@ -1260,7 +1231,6 @@ class _AdminPanelState extends State<_AdminPanel>
                   ],
                 ),
 
-                // Badge de suscripción de pago (si aplica)
                 if (user['subscription_plan'] != null) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -1290,7 +1260,6 @@ class _AdminPanelState extends State<_AdminPanel>
                   ),
                 ],
 
-                // Badge de verificación (solo para inmobiliarias)
                 if (role == 'AGENCY' && user['verification_status'] != null) ...[
                   const SizedBox(height: 6),
                   Container(
@@ -1319,10 +1288,8 @@ class _AdminPanelState extends State<_AdminPanel>
 
                 const SizedBox(height: 10),
 
-                // Acciones
                 Row(
                   children: [
-                    // Cambiar rol
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () =>
@@ -1343,7 +1310,6 @@ class _AdminPanelState extends State<_AdminPanel>
                     ),
                     const SizedBox(width: 6),
 
-                    // Activar/Desactivar
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: active
@@ -1377,7 +1343,6 @@ class _AdminPanelState extends State<_AdminPanel>
                     ),
                     const SizedBox(width: 6),
 
-                    // Eliminar permanente
                     OutlinedButton(
                       onPressed: () =>
                           _deleteUser(user['id'], user['name']),
@@ -1701,7 +1666,6 @@ class _ProfileView extends StatelessWidget {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // Header con degradado
           SliverToBoxAdapter(
             child: Container(
               padding: EdgeInsets.only(
@@ -1776,7 +1740,6 @@ class _ProfileView extends StatelessWidget {
               ),
             ),
           ),
-          // Secciones
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -1830,6 +1793,14 @@ class _ProfileView extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                             builder: (_) => const NotificationsView())),
+                  ),
+                  const SizedBox(height: 16),
+                  _SectionHeader(theme: theme, title: 'Preferencias'),
+                  _ProfileTile(
+                    theme: theme,
+                    icon: Icons.dark_mode_outlined,
+                    title: 'Apariencia',
+                    onTap: () => showThemeSelectorSheet(context),
                   ),
                   const SizedBox(height: 16),
                   _SectionHeader(theme: theme, title: 'Soporte'),
@@ -1932,7 +1903,6 @@ class _ActivityChart extends StatelessWidget {
       );
     }
 
-    // Actividad total del día = propiedades nuevas + búsquedas + citas
     final totals = data.map((d) {
       final props = (d['properties'] ?? 0) as int;
       final searches = (d['searches'] ?? 0) as int;

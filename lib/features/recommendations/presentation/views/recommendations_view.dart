@@ -267,12 +267,12 @@ class _RecommendationsViewState extends State<RecommendationsView> {
                             childCount: _recommendations.length,
                           ),
                           gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            childAspectRatio: 0.62,
-                          ),
+                              const SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: 200,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                                childAspectRatio: 0.62,
+                              ),
                         ),
                       ),
                   ],

@@ -9,6 +9,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:device_preview/device_preview.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_viewmodel.dart';
 import 'core/security/fcm_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/security/fcm_security_service.dart';
@@ -20,7 +21,7 @@ import 'features/auth/data/datasources/auth_remote_datasource.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/domain/usecases/login_with_google_usecase.dart';
 import 'features/auth/domain/usecases/logout_usecase.dart';
-import 'features/auth/presentation/viewmodels/auth_viewmodel.dart'; 
+import 'features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import 'features/auth/presentation/views/login_view.dart';
 import 'features/auth/presentation/views/main_navigation_view.dart';
 import 'features/auth/presentation/views/splash_view.dart';
@@ -48,19 +49,21 @@ void main() async {
 
   if (!kIsWeb) {
     // Stripe
-    Stripe.publishableKey = '...';
+    Stripe.publishableKey = 'pk_test_51Tv9XaAnoJRpC7akHvx4cQxODsfFYok7xVBoqdI0LPb3nHr0bZFVhhDgpc073zvYBpuOmg0UJ9tjU3pdx7fYq0EQ00NreRQ3Tu';
     await Stripe.instance.applySettings();
 
-    // FCM
+    // Inicializar FCM
     final fcmService = FcmService();
     await fcmService.initialize();
 
+    // Escuchar el evento de Wipe Remoto
     FcmService.onWipeStream.listen((triggered) {
       if (triggered) {
         navigatorKey.currentState?.pushNamedAndRemoveUntil('/', (route) => false);
       }
     });
 
+    // Registrar handler de background
     FirebaseMessaging.onBackgroundMessage(
       firebaseMessagingBackgroundHandler,
     );
@@ -75,6 +78,11 @@ void main() async {
     ),
   );
 
+  // DevicePreview envuelve toda la app para poder simular distintos
+  // dispositivos (tamaños de pantalla, densidades) sin tener el hardware
+  // físico. Se desactiva automáticamente en el build de release, así que
+  // nunca lo ven los usuarios reales en Play Store, solo aparece en
+  // debug/profile durante el desarrollo y la revisión técnica.
   runApp(
     DevicePreview(
       enabled: !kReleaseMode,
@@ -116,6 +124,7 @@ class HomeMatchApp extends StatelessWidget {
 
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ThemeViewModel()),
         ChangeNotifierProvider(create: (_) => InactivityManager()),
         ChangeNotifierProvider(
           create: (_) => AuthViewModel(
@@ -142,15 +151,17 @@ class HomeMatchApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => SearchViewModel(propertyRepository)),
       ],
-      child: Consumer<AuthViewModel>(
-        builder: (context, authVM, _) {
+      child: Consumer2<AuthViewModel, ThemeViewModel>(
+        builder: (context, authVM, themeVM, _) {
           return MaterialApp(
             navigatorKey: navigatorKey,
             title: 'HomeMatch AI',
             debugShowCheckedModeBanner: false,
             theme: materialTheme.light(),
             darkTheme: materialTheme.dark(),
-            themeMode: ThemeMode.light,
+            // Ahora el modo de tema viene del ThemeViewModel (persistido en
+            // el dispositivo), en vez de estar fijo en ThemeMode.light.
+            themeMode: themeVM.themeMode,
             // Requeridos por DevicePreview para simular MediaQuery/locale
             // del dispositivo elegido en el panel de simulación.
             useInheritedMediaQuery: true,

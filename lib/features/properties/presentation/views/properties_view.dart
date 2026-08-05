@@ -34,7 +34,7 @@ class _PropertiesViewState extends State<PropertiesView> {
       final favVM = context.read<FavoritesViewModel>();
 
       await propVM.loadProperties();
-      
+
       if (authVM.user != null && authVM.user!.id.isNotEmpty) {
         await favVM.loadFavorites(authVM.user!.id, propVM.properties);
       }
@@ -102,7 +102,6 @@ class _PropertiesViewState extends State<PropertiesView> {
           ),
         ),
         actions: [
-          // Campana con badge
           const _NotificationBell(),
           if (role == 'SELLER' || role == 'AGENCY' || role == 'ADMIN')
             IconButton(
@@ -145,12 +144,10 @@ class _PropertiesViewState extends State<PropertiesView> {
       ),
       body: Column(
         children: [
-          // Buscador
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: GestureDetector(
               onTap: () {
-                // Navegar al tab de Buscar (index 1)
                 final navState = context
                     .findAncestorStateOfType<MainNavigationViewState>();
                 navState?.goToTab(1);
@@ -178,7 +175,6 @@ class _PropertiesViewState extends State<PropertiesView> {
               ),
             ),
           ),
-          // Chips filtro
           SizedBox(
             height: 48,
             child: ListView.separated(
@@ -219,7 +215,6 @@ class _PropertiesViewState extends State<PropertiesView> {
               },
             ),
           ),
-          // Contador
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: Row(
@@ -262,7 +257,6 @@ class _PropertiesViewState extends State<PropertiesView> {
               ],
             ),
           ),
-          // Grid
           Expanded(
             child: _buildBody(vm, theme, favVM, authVM),
           ),
@@ -333,8 +327,16 @@ class _PropertiesViewState extends State<PropertiesView> {
 
         return GridView.builder(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
+          // SliverGridDelegateWithMaxCrossAxisExtent en vez de
+          // WithFixedCrossAxisCount: en vez de forzar siempre 2 columnas,
+          // calcula cuántas caben según el ancho real de la pantalla.
+          // En un teléfono normal sigue dando 2 columnas (el mismo
+          // resultado de antes); en una tablet o pantalla más ancha,
+          // automáticamente muestra 3 o más sin que nadie lo programe
+          // a mano por dispositivo — esto es lo que hace el diseño
+          // adaptativo, no solo responsivo.
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 200,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
             childAspectRatio: 0.62,
